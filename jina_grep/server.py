@@ -33,7 +33,10 @@ VALID_PROMPT_NAMES = {"query", "document"}
 
 # Guardrails
 MAX_BATCH_SIZE = 512
-MAX_SEQ_LENGTH = 32768
+MAX_SEQ_LENGTH = {
+    "jina-embeddings-v5-small": 32768,
+    "jina-embeddings-v5-nano": 8192,
+}
 
 app = FastAPI(title="Jina Grep Embedding Server")
 
@@ -194,7 +197,7 @@ async def list_models():
     return {
         "models": {name: list(tasks.keys()) for name, tasks in MLX_MODELS.items()},
         "matryoshka_dims": sorted(MATRYOSHKA_DIMS),
-        "max_seq_length": 32768,
+        "max_seq_length": MAX_SEQ_LENGTH,
     }
 
 

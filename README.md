@@ -17,7 +17,7 @@ graph LR
 | Model | Params | Dims | Max Seq | Matryoshka |
 |-------|--------|------|---------|------------|
 | jina-embeddings-v5-small | 677M | 1024 | 32768 | 32-1024 |
-| jina-embeddings-v5-nano | 239M | 768 | 32768 | 32-768 |
+| jina-embeddings-v5-nano | 239M | 768 | 8192 | 32-768 |
 
 Per-task MLX checkpoints (retrieval, text-matching, clustering, classification) loaded on demand from HuggingFace. No PyTorch, no transformers - pure MLX on Metal GPU. Server auto-batches large inputs (up to 256 per request).
 
