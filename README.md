@@ -90,45 +90,48 @@ Regex flags (`-E`, `-F`, `-G`, `-P`, `-w`, `-x`) are not needed: use grep for pa
 
 Each model has per-task MLX checkpoints (retrieval, text-matching, clustering, classification) loaded on demand.
 
-## Benchmark (M3 Ultra, pure MLX)
+## Benchmark (M3 Ultra, pure MLX, optimized model.py)
+
+Uses `mx.fast.rope` and `mx.fast.scaled_dot_product_attention` for Metal-accelerated inference.
+Verified numerically identical to original (MSE < 2e-9, cosine > 0.9999).
 
 ### v5-small (677M params, 1024 dims)
 
 ```
 Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s
 ---------------------------------------------------------------------------
-1x short                      1       9     17.5     17.5        514
-1x medium                     1     117     21.6     21.5       5416
-1x long (~520 tok)            1     624     47.2     47.0      13231
-1x very long (~2.6K tok)      1    2470    275.2    274.3       8975
-8x short                      8      72     21.8     21.8       3296
-32x short                    32     291     36.0     35.7       8084
-128x short                  128    1164     98.3     97.6      11843
-256x short                  256    2329    180.9    181.0      12872
-8x long                       8    4992    265.3    264.3      18814
-32x long                     32   19968   1113.0   1101.9      17941
+1x short                      1       9      7.3      7.3       1228
+1x medium                     1     117     12.1     12.1       9633
+1x long (~520 tok)            1     624     33.2     32.4      18790
+1x very long (~2.6K tok)      1    2470    164.1    164.0      15051
+8x short                      8      72     11.7     11.5       6128
+32x short                    32     291     23.7     23.7      12279
+128x short                  128    1164     70.1     70.6      16614
+256x short                  256    2329    132.2    133.2      17614
+8x long                       8    4992    197.3    197.1      25298
+32x long                     32   19968    810.7    774.0      24631
 ```
 
-Single query: ~18ms. Peak throughput: **18.8K tok/s**.
+Single query: **7ms**. Peak throughput: **25.3K tok/s**. (~1.4x faster than unoptimized)
 
 ### v5-nano (239M params, 768 dims)
 
 ```
 Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s
 ---------------------------------------------------------------------------
-1x short                      1       9      3.3      3.2       2730
-1x medium                     1     117      4.7      4.6      25134
-1x long (~520 tok)            1     624     10.3     10.2      60564
-1x very long (~2.6K tok)      1    2470     42.2     42.2      58549
-8x short                      8      72      6.1      6.1      11763
-32x short                    32     291     11.5     11.0      25381
-128x short                  128    1164     29.5     29.5      39491
-256x short                  256    2329     54.4     54.1      42808
-8x long                       8    4992     53.4     53.4      93442
-32x long                     32   19968    200.9    201.1      99410
+1x short                      1       9      2.9      2.8       3145
+1x medium                     1     117      4.4      4.4      26353
+1x long (~520 tok)            1     624     10.1     10.1      61660
+1x very long (~2.6K tok)      1    2470     41.0     40.9      60193
+8x short                      8      72      5.2      5.1      13836
+32x short                    32     291      8.7      8.6      33344
+128x short                  128    1164     22.6     22.3      51399
+256x short                  256    2329     41.7     42.0      55829
+8x long                       8    4992     52.2     51.7      95668
+32x long                     32   19968    202.2    201.7      98740
 ```
 
-Single query: **3.3ms**. Peak throughput: **99.4K tok/s**.
+Single query: **2.9ms**. Peak throughput: **98.7K tok/s**.
 
 ## Architecture
 
