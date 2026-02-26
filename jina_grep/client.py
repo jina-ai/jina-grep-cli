@@ -287,7 +287,8 @@ def split_into_chunks(
         for i, line in enumerate(lines):
             if not line.strip():
                 continue
-            sentences = re.split(r"(?<=[.!?])\s+", line)
+            # Split on sentence-ending punctuation (English and CJK)
+            sentences = re.split(r"(?<=[.!?。！？])\s*", line)
             for sentence in sentences:
                 if sentence.strip():
                     chunks.append((i + 1, sentence.strip()))
