@@ -25,12 +25,23 @@ MLX_MODELS = {
     },
 }
 
+# Supported Matryoshka dimensions
+MATRYOSHKA_DIMS = {32, 64, 128, 256, 512, 768, 1024}
+
 VALID_TASKS = {"retrieval", "text-matching", "clustering", "classification"}
 VALID_PROMPT_NAMES = {"query", "document"}
+VALID_QUANTIZATIONS = {"float32", "4bit", "8bit"}
+
+# Weight file mapping
+QUANT_WEIGHT_FILES = {
+    "float32": "model.safetensors",
+    "4bit": "model-4bit.safetensors",
+    "8bit": "model-8bit.safetensors",
+}
 
 app = FastAPI(title="Jina Grep Embedding Server")
 
-# Global model cache: key = (model_name, task) -> (model, tokenizer)
+# Global model cache: key = (model_name, task, quantization) -> (model, tokenizer)
 _models: dict = {}
 
 
@@ -39,6 +50,8 @@ class EmbeddingRequest(BaseModel):
     model: str = "jina-embeddings-v5-small"
     task: str = "retrieval"
     prompt_name: Optional[str] = "query"
+    truncate_dim: Optional[int] = None
+    quantization: str = "float32"
 
 
 class EmbeddingData(BaseModel):
@@ -59,21 +72,22 @@ class EmbeddingResponse(BaseModel):
     usage: UsageInfo
 
 
-def get_model(model_name: str, task: str):
+def get_model(model_name: str, task: str, quantization: str = "float32"):
     """Load or retrieve cached MLX model and tokenizer for given task."""
     if model_name not in MLX_MODELS:
         raise ValueError(f"Unsupported model: {model_name}. Supported: {', '.join(MLX_MODELS)}")
     if task not in VALID_TASKS:
         raise ValueError(f"Unsupported task: {task}. Supported: {', '.join(VALID_TASKS)}")
+    if quantization not in VALID_QUANTIZATIONS:
+        raise ValueError(f"Unsupported quantization: {quantization}. Supported: {', '.join(VALID_QUANTIZATIONS)}")
 
-    cache_key = (model_name, task)
+    cache_key = (model_name, task, quantization)
     if cache_key not in _models:
         import importlib.util
         import json
 
         import mlx.core as mx
-        import mlx.nn as nn
-        from huggingface_hub import hf_hub_download, snapshot_download
+        from huggingface_hub import snapshot_download
         from tokenizers import Tokenizer
 
         hf_name = MLX_MODELS[model_name][task]
@@ -87,18 +101,23 @@ def get_model(model_name: str, task: str):
             config = json.load(f)
 
         # Import model.py from the downloaded repo
-        spec = importlib.util.spec_from_file_location("jina_mlx_model", os.path.join(model_dir, "model.py"))
+        spec = importlib.util.spec_from_file_location(
+            f"jina_mlx_model_{task}_{quantization}",
+            os.path.join(model_dir, "model.py"),
+        )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
-        # Create model
+        # Create model and load weights
         model = mod.JinaEmbeddingModel(config)
-
-        # Load weights
-        weights = mx.load(os.path.join(model_dir, "model.safetensors"))
+        weight_file = QUANT_WEIGHT_FILES[quantization]
+        weight_path = os.path.join(model_dir, weight_file)
+        if not os.path.exists(weight_path):
+            raise ValueError(f"Weight file not found: {weight_file} for {hf_name}")
+        weights = mx.load(weight_path)
         model.load_weights(list(weights.items()))
         mx.eval(model.parameters())
-        print(f"Loaded {hf_name} with pure MLX")
+        print(f"Loaded {hf_name} ({quantization}) with pure MLX")
 
         # Load tokenizer
         tokenizer = Tokenizer.from_file(os.path.join(model_dir, "tokenizer.json"))
@@ -123,8 +142,14 @@ async def create_embeddings(request: EmbeddingRequest):
     if task not in VALID_TASKS:
         raise HTTPException(status_code=400, detail=f"Invalid task: {task}. Must be one of: {', '.join(VALID_TASKS)}")
 
+    if request.truncate_dim is not None and request.truncate_dim not in MATRYOSHKA_DIMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid truncate_dim: {request.truncate_dim}. Must be one of: {sorted(MATRYOSHKA_DIMS)}",
+        )
+
     try:
-        model, tokenizer = get_model(request.model, task)
+        model, tokenizer = get_model(request.model, task, request.quantization)
     except (ValueError, RuntimeError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -139,7 +164,12 @@ async def create_embeddings(request: EmbeddingRequest):
 
     try:
         import mlx.core as mx
-        embeddings = model.encode(request.input, tokenizer, task_type=task_type)
+        embeddings = model.encode(
+            request.input,
+            tokenizer,
+            task_type=task_type,
+            truncate_dim=request.truncate_dim,
+        )
         mx.eval(embeddings)
         embeddings = embeddings.tolist()
     except Exception as e:
@@ -166,7 +196,12 @@ async def health():
 
 @app.get("/models")
 async def list_models():
-    return {"models": {name: list(tasks.keys()) for name, tasks in MLX_MODELS.items()}}
+    return {
+        "models": {name: list(tasks.keys()) for name, tasks in MLX_MODELS.items()},
+        "quantizations": sorted(VALID_QUANTIZATIONS),
+        "matryoshka_dims": sorted(MATRYOSHKA_DIMS),
+        "max_seq_length": 32768,
+    }
 
 
 # --- PID management ---
@@ -221,7 +256,6 @@ def start_server(host: str = "127.0.0.1", port: int = 8089, daemon: bool = True)
         log_dir.mkdir(exist_ok=True)
         log_file = log_dir / "server.log"
 
-        # Use subprocess instead of fork (fork breaks Metal/MPS GPU access)
         with open(log_file, "a") as lf:
             proc = subprocess.Popen(
                 [sys.executable, "-m", "jina_grep.server", "--host", host, "--port", str(port)],
@@ -232,7 +266,6 @@ def start_server(host: str = "127.0.0.1", port: int = 8089, daemon: bool = True)
         print(f"Server starting in background (PID: {proc.pid})")
         return
 
-    # Foreground mode
     import uvicorn
     write_pid()
 

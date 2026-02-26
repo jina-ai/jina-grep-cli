@@ -70,8 +70,28 @@ class EmbeddingClient:
         model: str = "jina-embeddings-v5-small",
         task: str = "retrieval",
         prompt_name: str = None,
+        batch_size: int = 256,
     ) -> np.ndarray:
-        """Get embeddings for texts."""
+        """Get embeddings for texts. Auto-batches large inputs."""
+        if len(texts) <= batch_size:
+            return self._embed_batch(texts, model, task, prompt_name)
+
+        # Batch large inputs to avoid HTTP payload issues
+        all_embeddings = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            embs = self._embed_batch(batch, model, task, prompt_name)
+            all_embeddings.append(embs)
+        return np.vstack(all_embeddings)
+
+    def _embed_batch(
+        self,
+        texts: list[str],
+        model: str,
+        task: str,
+        prompt_name: str = None,
+    ) -> np.ndarray:
+        """Embed a single batch."""
         payload = {"input": texts, "model": model, "task": task}
         if prompt_name:
             payload["prompt_name"] = prompt_name

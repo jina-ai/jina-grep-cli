@@ -1,15 +1,18 @@
 # jina-grep
 
-Semantic grep powered by Jina embeddings v5 running locally on Apple Silicon (MLX).
+Semantic grep powered by Jina embeddings v5, running locally on Apple Silicon via MLX.
 
 Two modes: pipe grep output for semantic reranking, or search files directly.
 
 ## Install
 
 ```bash
+git clone https://github.com/jina-ai/jina-grep-cli.git && cd jina-grep-cli
 uv venv .venv && source .venv/bin/activate
 uv pip install -e .
 ```
+
+Requirements: Python 3.10+, Apple Silicon Mac.
 
 ## Usage
 
@@ -35,8 +38,8 @@ When you don't have a keyword to grep for:
 
 ```bash
 jina-grep "memory leak" src/
-jina-grep -r --threshold=0.6 "database connection pooling" .
-jina-grep --top-k=5 "retry with exponential backoff" *.py
+jina-grep -r --threshold 0.3 "database connection pooling" .
+jina-grep --top-k 5 "retry with exponential backoff" *.py
 ```
 
 ### Server management
@@ -50,39 +53,54 @@ jina-grep serve status
 ## Options
 
 ```
--r, -R          Recursive search (standalone mode)
--l              Print only filenames with matches
--L              Print only filenames without matches
--c              Print match count per file
--n              Print line numbers (default: on)
--H / --no-filename   Show / hide filename
--A/-B/-C NUM    Context lines after/before/both
---include=GLOB  Search only matching files
---exclude=GLOB  Skip matching files
---exclude-dir   Skip matching directories
---color=WHEN    never/always/auto
--v              Invert match (lowest similarity)
--m NUM          Max matches per file
--q              Quiet mode
---threshold     Cosine similarity threshold (default: 0.5)
---top-k         Max results (default: 10)
---model         Model name (default: jina-embeddings-v5-small)
---task          retrieval/text-matching/clustering/classification (default: retrieval)
---server        Server URL (default: http://localhost:8089)
---granularity   line/paragraph/sentence (default: line)
+Grep-compatible flags:
+  -r, -R          Recursive search (standalone mode)
+  -l              Print only filenames with matches
+  -L              Print only filenames without matches
+  -c              Print match count per file
+  -n              Print line numbers (default: on)
+  -H / --no-filename   Show / hide filename
+  -A/-B/-C NUM    Context lines after/before/both
+  --include=GLOB  Search only matching files
+  --exclude=GLOB  Skip matching files
+  --exclude-dir   Skip matching directories
+  --color=WHEN    never/always/auto
+  -v              Invert match (lowest similarity)
+  -m NUM          Max matches per file
+  -q              Quiet mode
+
+Semantic flags:
+  --threshold     Cosine similarity threshold (default: 0.5)
+  --top-k         Max results (default: 10)
+  --model         Model name (default: jina-embeddings-v5-small)
+  --task          retrieval/text-matching/clustering/classification
+  --server        Server URL (default: http://localhost:8089)
+  --granularity   line/paragraph/sentence (default: line)
 ```
 
-In pipe mode, most file-related flags are ignored since grep handles file traversal.
+In pipe mode, file-related flags are ignored since grep handles file traversal.
 Regex flags (`-E`, `-F`, `-G`, `-P`, `-w`, `-x`) are not needed: use grep for pattern matching, jina-grep for meaning.
 
 ## Models
 
-- `jina-embeddings-v5-small` (default) - 677M params, 1024 dims
-- `jina-embeddings-v5-nano` - 239M params, 768 dims
+| Model | Params | Dims | Max Seq Length | Matryoshka |
+|-------|--------|------|----------------|------------|
+| jina-embeddings-v5-small | 677M | 1024 | 32768 | 32, 64, 128, 256, 512, 768, 1024 |
+| jina-embeddings-v5-nano | 239M | 768 | 32768 | 32, 64, 128, 256, 512, 768 |
 
-Each model has per-task MLX checkpoints (retrieval, text-matching, clustering, classification) that are loaded on demand.
+Each model has per-task MLX checkpoints (retrieval, text-matching, clustering, classification) loaded on demand.
 
-## Benchmark (M3 Ultra, pure MLX)
+### Quantization
+
+Three weight variants per model, selectable via API `quantization` field:
+
+| Level | v5-small Size | Speed | Quality (vs float32) |
+|-------|--------------|-------|---------------------|
+| float32 | 2.28 GB | baseline | 1.0000 |
+| 8bit | 639 MB | ~1.5-2x | >= 0.9999 |
+| 4bit | 355 MB | ~2-3x | >= 0.99 |
+
+## Benchmark (M3 Ultra, v5-small float32)
 
 ```
 Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s
@@ -95,4 +113,23 @@ Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s
 128x short (~1K tok)        128    1164     99.7     98.8      11676
 ```
 
-Single short text: ~18ms latency. Batch throughput peaks at ~11.7K tok/s.
+Single query: ~18ms. Batch throughput: ~11.7K tok/s peak.
+
+## Architecture
+
+```
+jina-grep "query" files/  -----> HTTP -----> jina-grep serve (MLX on Metal GPU)
+grep ... | jina-grep "query"                   |
+                                               v
+                                     model.py + safetensors
+                                     (pure MLX, no PyTorch)
+```
+
+- Server loads MLX checkpoints directly (model.py from HuggingFace repo)
+- No PyTorch, no transformers, no sentence-transformers dependency
+- Cosine similarity computed with NumPy (server returns L2-normalized embeddings)
+- Large inputs auto-batched (256 per request)
+
+## License
+
+Apache-2.0
