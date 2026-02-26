@@ -1,4 +1,4 @@
-"""FastAPI server for local embedding generation using MLX."""
+"""FastAPI server for local embedding generation using pure MLX."""
 
 import os
 import signal
@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -27,11 +26,11 @@ MLX_MODELS = {
 }
 
 VALID_TASKS = {"retrieval", "text-matching", "clustering", "classification"}
-VALID_PROMPT_NAMES = {"query", "document"}  # only for retrieval task
+VALID_PROMPT_NAMES = {"query", "document"}
 
 app = FastAPI(title="Jina Grep Embedding Server")
 
-# Global model cache: key = (model_name, task)
+# Global model cache: key = (model_name, task) -> (model, tokenizer)
 _models: dict = {}
 
 
@@ -39,7 +38,7 @@ class EmbeddingRequest(BaseModel):
     input: list[str]
     model: str = "jina-embeddings-v5-small"
     task: str = "retrieval"
-    prompt_name: Optional[str] = "query"  # query or document, only for retrieval
+    prompt_name: Optional[str] = "query"
 
 
 class EmbeddingData(BaseModel):
@@ -61,7 +60,7 @@ class EmbeddingResponse(BaseModel):
 
 
 def get_model(model_name: str, task: str):
-    """Load or retrieve cached model for given task."""
+    """Load or retrieve cached MLX model and tokenizer for given task."""
     if model_name not in MLX_MODELS:
         raise ValueError(f"Unsupported model: {model_name}. Supported: {', '.join(MLX_MODELS)}")
     if task not in VALID_TASKS:
@@ -69,22 +68,42 @@ def get_model(model_name: str, task: str):
 
     cache_key = (model_name, task)
     if cache_key not in _models:
-        from sentence_transformers import SentenceTransformer
+        import importlib.util
+        import json
+
+        import mlx.core as mx
+        import mlx.nn as nn
+        from huggingface_hub import hf_hub_download, snapshot_download
+        from tokenizers import Tokenizer
 
         hf_name = MLX_MODELS[model_name][task]
 
-        # Try MLX backend first (Apple Silicon), fall back to default
-        try:
-            model = SentenceTransformer(hf_name, backend="mlx", trust_remote_code=True)
-            print(f"Loaded {hf_name} with MLX backend")
-        except Exception:
-            try:
-                model = SentenceTransformer(hf_name, trust_remote_code=True)
-                print(f"Loaded {hf_name} with default backend")
-            except Exception as e:
-                raise RuntimeError(f"Failed to load {hf_name}: {e}")
+        # Download all model files
+        model_dir = snapshot_download(hf_name)
+        print(f"Downloaded {hf_name} to {model_dir}")
 
-        _models[cache_key] = model
+        # Load config
+        with open(os.path.join(model_dir, "config.json")) as f:
+            config = json.load(f)
+
+        # Import model.py from the downloaded repo
+        spec = importlib.util.spec_from_file_location("jina_mlx_model", os.path.join(model_dir, "model.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        # Create model
+        model = mod.JinaEmbeddingModel(config)
+
+        # Load weights
+        weights = mx.load(os.path.join(model_dir, "model.safetensors"))
+        model.load_weights(list(weights.items()))
+        mx.eval(model.parameters())
+        print(f"Loaded {hf_name} with pure MLX")
+
+        # Load tokenizer
+        tokenizer = Tokenizer.from_file(os.path.join(model_dir, "tokenizer.json"))
+
+        _models[cache_key] = (model, tokenizer)
 
     return _models[cache_key]
 
@@ -105,24 +124,26 @@ async def create_embeddings(request: EmbeddingRequest):
         raise HTTPException(status_code=400, detail=f"Invalid task: {task}. Must be one of: {', '.join(VALID_TASKS)}")
 
     try:
-        model = get_model(request.model, task)
+        model, tokenizer = get_model(request.model, task)
     except (ValueError, RuntimeError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # For retrieval task, use prompt_name (query vs document)
-    encode_kwargs = {"normalize_embeddings": True}
-    if task == "retrieval" and request.prompt_name:
-        if request.prompt_name not in VALID_PROMPT_NAMES:
-            raise HTTPException(status_code=400, detail=f"Invalid prompt_name: {request.prompt_name}")
-        encode_kwargs["prompt_name"] = request.prompt_name
+    # Map prompt_name to task_type for the model's encode()
+    if task == "retrieval":
+        prompt_name = request.prompt_name or "query"
+        if prompt_name not in VALID_PROMPT_NAMES:
+            raise HTTPException(status_code=400, detail=f"Invalid prompt_name: {prompt_name}")
+        task_type = f"retrieval.{prompt_name}" if prompt_name == "query" else "retrieval.passage"
+    else:
+        task_type = task
 
     try:
-        embeddings = model.encode(request.input, **encode_kwargs)
+        import mlx.core as mx
+        embeddings = model.encode(request.input, tokenizer, task_type=task_type)
+        mx.eval(embeddings)
+        embeddings = embeddings.tolist()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Encoding failed: {e}")
-
-    if isinstance(embeddings, np.ndarray):
-        embeddings = embeddings.tolist()
 
     data = [
         EmbeddingData(index=i, embedding=emb)
