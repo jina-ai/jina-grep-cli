@@ -1,8 +1,21 @@
+<p align="center">
+  <img src="logo.svg" alt="jina-grep" width="80"/>
+</p>
+
 # jina-grep
 
 Semantic grep powered by Jina embeddings v5, running locally on Apple Silicon via MLX.
 
 Two modes: pipe grep output for semantic reranking, or search files directly.
+
+## Supported Models
+
+| Model | Params | Dims | Max Seq | Matryoshka Dims |
+|-------|--------|------|---------|-----------------|
+| jina-embeddings-v5-small | 677M | 1024 | 32768 | 32, 64, 128, 256, 512, 768, 1024 |
+| jina-embeddings-v5-nano | 239M | 768 | 32768 | 32, 64, 128, 256, 512, 768 |
+
+Each model has per-task MLX checkpoints (retrieval, text-matching, clustering, classification) loaded on demand. No PyTorch, no transformers - pure MLX with Metal GPU acceleration.
 
 ## Install
 
@@ -44,7 +57,7 @@ jina-grep --top-k 5 "retry with exponential backoff" *.py
 
 ### Server management
 
-```
+```bash
 jina-grep serve start [--port 8089] [--host 127.0.0.1] [--foreground]
 jina-grep serve stop
 jina-grep serve status
@@ -81,19 +94,21 @@ Semantic flags:
 In pipe mode, file-related flags are ignored since grep handles file traversal.
 Regex flags (`-E`, `-F`, `-G`, `-P`, `-w`, `-x`) are not needed: use grep for pattern matching, jina-grep for meaning.
 
-## Models
+## Architecture
 
-| Model | Params | Dims | Max Seq Length | Matryoshka |
-|-------|--------|------|----------------|------------|
-| jina-embeddings-v5-small | 677M | 1024 | 32768 | 32, 64, 128, 256, 512, 768, 1024 |
-| jina-embeddings-v5-nano | 239M | 768 | 32768 | 32, 64, 128, 256, 512, 768 |
+```mermaid
+graph LR
+    A["jina-grep 'query' files/"] --> C[HTTP :8089]
+    B["grep ... | jina-grep 'query'"] --> C
+    C --> D["jina-grep serve<br/>(MLX on Metal GPU)"]
+    D --> E["model.py + safetensors<br/>(HuggingFace checkpoints)"]
+```
 
-Each model has per-task MLX checkpoints (retrieval, text-matching, clustering, classification) loaded on demand.
+- Server loads MLX checkpoints directly from HuggingFace repos
+- Cosine similarity computed with NumPy (server returns L2-normalized embeddings)
+- Large inputs auto-batched (256 per request)
 
-## Benchmark (M3 Ultra, pure MLX, optimized model.py)
-
-Uses `mx.fast.rope` and `mx.fast.scaled_dot_product_attention` for Metal-accelerated inference.
-Verified numerically identical to original (MSE < 2e-9, cosine > 0.9999).
+## Benchmark (M3 Ultra)
 
 ### v5-small (677M params, 1024 dims)
 
@@ -132,21 +147,6 @@ Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s
 ```
 
 Single query: **2.9ms**. Peak throughput: **98.7K tok/s**.
-
-## Architecture
-
-```
-jina-grep "query" files/  -----> HTTP -----> jina-grep serve (MLX on Metal GPU)
-grep ... | jina-grep "query"                   |
-                                               v
-                                     model.py + safetensors
-                                     (pure MLX, no PyTorch)
-```
-
-- Server loads MLX checkpoints directly (model.py from HuggingFace repo)
-- No PyTorch, no transformers, no sentence-transformers dependency
-- Cosine similarity computed with NumPy (server returns L2-normalized embeddings)
-- Large inputs auto-batched (256 per request)
 
 ## License
 
