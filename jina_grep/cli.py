@@ -5,7 +5,7 @@ from pathlib import Path
 
 import click
 
-from .client import SearchOptions, semantic_grep
+from .client import SearchOptions, pipe_rerank, semantic_grep
 from .server import server_status, start_server, stop_server
 
 
@@ -37,14 +37,13 @@ def status():
 
 
 def main():
-    """Entry point that routes to either 'serve' or grep mode."""
+    """Entry point: routes to 'serve' subcommand or grep mode."""
     args = sys.argv[1:]
 
     if args and args[0] == "serve":
         serve(args[1:], standalone_mode=True)
         return
 
-    # Everything else is grep mode
     grep_main(args)
 
 
@@ -87,10 +86,13 @@ def grep_main(args=None):
         PATTERN is a natural language query (not regex).
 
         \b
-        Examples:
+        Pipe mode (rerank grep output):
+            grep -rn "error" src/ | jina-grep "error handling"
+
+        \b
+        Standalone mode (direct semantic search):
             jina-grep "error handling" src/
             jina-grep -r --threshold=0.6 "database connection" .
-            jina-grep --top-k=5 "user authentication" *.py
 
         \b
         Server:
@@ -134,6 +136,15 @@ def grep_main(args=None):
             granularity=granularity,
         )
 
+        # Pipe mode: stdin has data and is not a TTY
+        # Also check if files were provided -- if so, prefer standalone mode
+        if not sys.stdin.isatty() and not files:
+            import select
+            if select.select([sys.stdin], [], [], 0.0)[0]:
+                exit_code = pipe_rerank(pattern, options)
+                sys.exit(exit_code)
+
+        # Standalone mode: need files
         if not files:
             files = (".",)
 
