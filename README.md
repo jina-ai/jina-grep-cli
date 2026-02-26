@@ -77,5 +77,22 @@ Regex flags (`-E`, `-F`, `-G`, `-P`, `-w`, `-x`) are not needed: use grep for pa
 
 ## Models
 
-- `jina-embeddings-v5-small` (default) - 568M params, 1024 dims
-- `jina-embeddings-v5-nano` - 207M params, 768 dims
+- `jina-embeddings-v5-small` (default) - 677M params, 1024 dims
+- `jina-embeddings-v5-nano` - 239M params, 768 dims
+
+Each model has per-task MLX checkpoints (retrieval, text-matching, clustering, classification) that are loaded on demand.
+
+## Benchmark (M3 Ultra, MLX)
+
+```
+Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s
+---------------------------------------------------------------------------
+1x short (~8 tok)             1       9     17.7     17.3        508
+1x medium (~130 tok)          1     117     28.2     23.9       4156
+1x long (~520 tok)            1     520     60.4     50.2       8605
+8x short (~64 tok)            8      72     47.1     23.9       1530
+32x short (~256 tok)         32     291     53.8     42.2       5406
+128x short (~1K tok)        128    1164    160.0    159.2       7275
+```
+
+Single short text: ~18ms latency. Batch throughput peaks at ~8.6K tok/s.
