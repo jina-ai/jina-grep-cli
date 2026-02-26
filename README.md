@@ -4,15 +4,6 @@ Semantic grep powered by Jina embeddings v5, running locally on Apple Silicon vi
 
 Three modes: pipe grep output for semantic reranking, search files directly with natural language, or zero-shot classification.
 
-```mermaid
-graph LR
-    A["grep -rn 'error' src/"] -->|pipe| C["jina-grep CLI"]
-    B["jina-grep 'query' files/"] --> C
-    C -->|HTTP| D["Embedding Server\n:8089"]
-    D -->|MLX Metal GPU| E["v5-small 677M\nv5-nano 239M"]
-    E -->|L2-normalized| F["Cosine Similarity\n+ Ranking"]
-    F --> G["Ranked Output\nwith scores"]
-```
 
 | Model | Params | Dims | Max Seq | Matryoshka |
 |-------|--------|------|---------|------------|
