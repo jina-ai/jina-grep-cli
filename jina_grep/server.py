@@ -30,6 +30,11 @@ MATRYOSHKA_DIMS = {32, 64, 128, 256, 512, 768, 1024}
 
 VALID_TASKS = {"retrieval", "text-matching", "clustering", "classification"}
 VALID_PROMPT_NAMES = {"query", "document"}
+
+# Guardrails
+MAX_BATCH_SIZE = 512
+MAX_SEQ_LENGTH = 32768
+
 app = FastAPI(title="Jina Grep Embedding Server")
 
 # Global model cache: key = (model_name, task) -> (model, tokenizer)
@@ -121,6 +126,12 @@ async def create_embeddings(request: EmbeddingRequest):
     """Generate embeddings for input texts."""
     if not request.input:
         raise HTTPException(status_code=400, detail="Input cannot be empty")
+
+    if len(request.input) > MAX_BATCH_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Batch size {len(request.input)} exceeds maximum {MAX_BATCH_SIZE}",
+        )
 
     task = request.task
     if task not in VALID_TASKS:

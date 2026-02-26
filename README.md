@@ -90,20 +90,45 @@ Regex flags (`-E`, `-F`, `-G`, `-P`, `-w`, `-x`) are not needed: use grep for pa
 
 Each model has per-task MLX checkpoints (retrieval, text-matching, clustering, classification) loaded on demand.
 
-## Benchmark (M3 Ultra, v5-small)
+## Benchmark (M3 Ultra, pure MLX)
+
+### v5-small (677M params, 1024 dims)
 
 ```
 Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s
 ---------------------------------------------------------------------------
-1x short (~8 tok)             1       9     17.8     17.9        505
-1x medium (~130 tok)          1     117     22.3     22.2       5245
-1x long (~520 tok)            1     520     45.4     45.6      11464
-8x short (~64 tok)            8      72     23.4     23.3       3080
-32x short (~256 tok)         32     291     36.8     36.9       7903
-128x short (~1K tok)        128    1164     99.7     98.8      11676
+1x short                      1       9     17.5     17.5        514
+1x medium                     1     117     21.6     21.5       5416
+1x long (~520 tok)            1     624     47.2     47.0      13231
+1x very long (~2.6K tok)      1    2470    275.2    274.3       8975
+8x short                      8      72     21.8     21.8       3296
+32x short                    32     291     36.0     35.7       8084
+128x short                  128    1164     98.3     97.6      11843
+256x short                  256    2329    180.9    181.0      12872
+8x long                       8    4992    265.3    264.3      18814
+32x long                     32   19968   1113.0   1101.9      17941
 ```
 
-Single query: ~18ms. Batch throughput: ~11.7K tok/s peak.
+Single query: ~18ms. Peak throughput: **18.8K tok/s**.
+
+### v5-nano (239M params, 768 dims)
+
+```
+Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s
+---------------------------------------------------------------------------
+1x short                      1       9      3.3      3.2       2730
+1x medium                     1     117      4.7      4.6      25134
+1x long (~520 tok)            1     624     10.3     10.2      60564
+1x very long (~2.6K tok)      1    2470     42.2     42.2      58549
+8x short                      8      72      6.1      6.1      11763
+32x short                    32     291     11.5     11.0      25381
+128x short                  128    1164     29.5     29.5      39491
+256x short                  256    2329     54.4     54.1      42808
+8x long                       8    4992     53.4     53.4      93442
+32x long                     32   19968    200.9    201.1      99410
+```
+
+Single query: **3.3ms**. Peak throughput: **99.4K tok/s**.
 
 ## Architecture
 
