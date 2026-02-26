@@ -2,18 +2,16 @@
 
 Semantic grep powered by Jina embeddings v5, running locally on Apple Silicon via MLX.
 
-Two modes: pipe grep output for semantic reranking, or search files directly.
+Two modes: pipe grep output for semantic reranking, or search files directly with natural language.
 
 ```mermaid
 graph LR
-    A["CLI"] --> B["HTTP"]
-    B --> C["MLX Server"]
-    C --> D["safetensors"]
-
-    style A fill:#fff,stroke:#333
-    style B fill:#fff,stroke:#333
-    style C fill:#E3F2FD,stroke:#1E88E5
-    style D fill:#FFF3E0,stroke:#FF9800
+    A["grep -rn 'error' src/"] -->|pipe| C["jina-grep CLI"]
+    B["jina-grep 'query' files/"] --> C
+    C -->|HTTP| D["Embedding Server\n:8089"]
+    D -->|MLX Metal GPU| E["v5-small 677M\nv5-nano 239M"]
+    E -->|L2-normalized| F["Cosine Similarity\n+ Ranking"]
+    F --> G["Ranked Output\nwith scores"]
 ```
 
 | Model | Params | Dims | Max Seq | Matryoshka |
@@ -21,7 +19,7 @@ graph LR
 | jina-embeddings-v5-small | 677M | 1024 | 32768 | 32-1024 |
 | jina-embeddings-v5-nano | 239M | 768 | 32768 | 32-768 |
 
-Per-task MLX checkpoints (retrieval, text-matching, clustering, classification) loaded on demand. No PyTorch, no transformers - pure MLX with Metal GPU.
+Per-task MLX checkpoints (retrieval, text-matching, clustering, classification) loaded on demand from HuggingFace. No PyTorch, no transformers - pure MLX on Metal GPU. Server auto-batches large inputs (up to 256 per request).
 
 ## Install
 
