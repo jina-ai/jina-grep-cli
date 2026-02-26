@@ -90,17 +90,7 @@ Regex flags (`-E`, `-F`, `-G`, `-P`, `-w`, `-x`) are not needed: use grep for pa
 
 Each model has per-task MLX checkpoints (retrieval, text-matching, clustering, classification) loaded on demand.
 
-### Quantization
-
-Three weight variants per model, selectable via API `quantization` field:
-
-| Level | v5-small Size | Speed | Quality (vs float32) |
-|-------|--------------|-------|---------------------|
-| float32 | 2.28 GB | baseline | 1.0000 |
-| 8bit | 639 MB | ~1.5-2x | >= 0.9999 |
-| 4bit | 355 MB | ~2-3x | >= 0.99 |
-
-## Benchmark (M3 Ultra, v5-small float32)
+## Benchmark (M3 Ultra, v5-small)
 
 ```
 Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s

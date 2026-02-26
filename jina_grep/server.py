@@ -30,18 +30,9 @@ MATRYOSHKA_DIMS = {32, 64, 128, 256, 512, 768, 1024}
 
 VALID_TASKS = {"retrieval", "text-matching", "clustering", "classification"}
 VALID_PROMPT_NAMES = {"query", "document"}
-VALID_QUANTIZATIONS = {"float32", "4bit", "8bit"}
-
-# Weight file mapping
-QUANT_WEIGHT_FILES = {
-    "float32": "model.safetensors",
-    "4bit": "model-4bit.safetensors",
-    "8bit": "model-8bit.safetensors",
-}
-
 app = FastAPI(title="Jina Grep Embedding Server")
 
-# Global model cache: key = (model_name, task, quantization) -> (model, tokenizer)
+# Global model cache: key = (model_name, task) -> (model, tokenizer)
 _models: dict = {}
 
 
@@ -51,7 +42,6 @@ class EmbeddingRequest(BaseModel):
     task: str = "retrieval"
     prompt_name: Optional[str] = "query"
     truncate_dim: Optional[int] = None
-    quantization: str = "float32"
 
 
 class EmbeddingData(BaseModel):
@@ -72,16 +62,14 @@ class EmbeddingResponse(BaseModel):
     usage: UsageInfo
 
 
-def get_model(model_name: str, task: str, quantization: str = "float32"):
+def get_model(model_name: str, task: str):
     """Load or retrieve cached MLX model and tokenizer for given task."""
     if model_name not in MLX_MODELS:
         raise ValueError(f"Unsupported model: {model_name}. Supported: {', '.join(MLX_MODELS)}")
     if task not in VALID_TASKS:
         raise ValueError(f"Unsupported task: {task}. Supported: {', '.join(VALID_TASKS)}")
-    if quantization not in VALID_QUANTIZATIONS:
-        raise ValueError(f"Unsupported quantization: {quantization}. Supported: {', '.join(VALID_QUANTIZATIONS)}")
 
-    cache_key = (model_name, task, quantization)
+    cache_key = (model_name, task)
     if cache_key not in _models:
         import importlib.util
         import json
@@ -102,7 +90,7 @@ def get_model(model_name: str, task: str, quantization: str = "float32"):
 
         # Import model.py from the downloaded repo
         spec = importlib.util.spec_from_file_location(
-            f"jina_mlx_model_{task}_{quantization}",
+            f"jina_mlx_model_{task}",
             os.path.join(model_dir, "model.py"),
         )
         mod = importlib.util.module_from_spec(spec)
@@ -110,14 +98,10 @@ def get_model(model_name: str, task: str, quantization: str = "float32"):
 
         # Create model and load weights
         model = mod.JinaEmbeddingModel(config)
-        weight_file = QUANT_WEIGHT_FILES[quantization]
-        weight_path = os.path.join(model_dir, weight_file)
-        if not os.path.exists(weight_path):
-            raise ValueError(f"Weight file not found: {weight_file} for {hf_name}")
-        weights = mx.load(weight_path)
+        weights = mx.load(os.path.join(model_dir, "model.safetensors"))
         model.load_weights(list(weights.items()))
         mx.eval(model.parameters())
-        print(f"Loaded {hf_name} ({quantization}) with pure MLX")
+        print(f"Loaded {hf_name} with pure MLX")
 
         # Load tokenizer
         tokenizer = Tokenizer.from_file(os.path.join(model_dir, "tokenizer.json"))
@@ -149,7 +133,7 @@ async def create_embeddings(request: EmbeddingRequest):
         )
 
     try:
-        model, tokenizer = get_model(request.model, task, request.quantization)
+        model, tokenizer = get_model(request.model, task)
     except (ValueError, RuntimeError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -198,7 +182,6 @@ async def health():
 async def list_models():
     return {
         "models": {name: list(tasks.keys()) for name, tasks in MLX_MODELS.items()},
-        "quantizations": sorted(VALID_QUANTIZATIONS),
         "matryoshka_dims": sorted(MATRYOSHKA_DIMS),
         "max_seq_length": 32768,
     }
