@@ -1,4 +1,4 @@
-# <img src="logo.svg" alt="" width="28" height="28" style="vertical-align: middle;"/> jina-grep
+# <img src="logo.svg?v=2" alt="" width="28" height="28" style="vertical-align: middle;"/> jina-grep
 
 Semantic grep powered by Jina embeddings v5, running locally on Apple Silicon via MLX.
 
