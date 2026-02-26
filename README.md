@@ -4,14 +4,24 @@ Semantic grep powered by Jina embeddings v5, running locally on Apple Silicon vi
 
 Two modes: pipe grep output for semantic reranking, or search files directly.
 
-## Supported Models
+```mermaid
+graph LR
+    A["CLI"] --> B["HTTP"]
+    B --> C["MLX Server"]
+    C --> D["safetensors"]
 
-| Model | Params | Dims | Max Seq | Matryoshka Dims |
-|-------|--------|------|---------|-----------------|
-| jina-embeddings-v5-small | 677M | 1024 | 32768 | 32, 64, 128, 256, 512, 768, 1024 |
-| jina-embeddings-v5-nano | 239M | 768 | 32768 | 32, 64, 128, 256, 512, 768 |
+    style A fill:#fff,stroke:#333
+    style B fill:#fff,stroke:#333
+    style C fill:#E3F2FD,stroke:#1E88E5
+    style D fill:#FFF3E0,stroke:#FF9800
+```
 
-Each model has per-task MLX checkpoints (retrieval, text-matching, clustering, classification) loaded on demand. No PyTorch, no transformers - pure MLX with Metal GPU acceleration.
+| Model | Params | Dims | Max Seq | Matryoshka |
+|-------|--------|------|---------|------------|
+| jina-embeddings-v5-small | 677M | 1024 | 32768 | 32-1024 |
+| jina-embeddings-v5-nano | 239M | 768 | 32768 | 32-768 |
+
+Per-task MLX checkpoints (retrieval, text-matching, clustering, classification) loaded on demand. No PyTorch, no transformers - pure MLX with Metal GPU.
 
 ## Install
 
@@ -33,8 +43,6 @@ jina-grep serve start
 
 ### Pipe mode: rerank grep output
 
-Use grep for text matching, pipe to jina-grep for semantic reranking:
-
 ```bash
 grep -rn "error" src/ | jina-grep "error handling logic"
 grep -rn "def.*test" . | jina-grep "unit tests for authentication"
@@ -42,8 +50,6 @@ grep -rn "TODO" . | jina-grep "performance optimization"
 ```
 
 ### Standalone mode: direct semantic search
-
-When you don't have a keyword to grep for:
 
 ```bash
 jina-grep "memory leak" src/
@@ -87,26 +93,9 @@ Semantic flags:
   --granularity   line/paragraph/sentence (default: line)
 ```
 
-In pipe mode, file-related flags are ignored since grep handles file traversal.
-Regex flags (`-E`, `-F`, `-G`, `-P`, `-w`, `-x`) are not needed: use grep for pattern matching, jina-grep for meaning.
-
-## Architecture
-
-```mermaid
-graph LR
-    A["jina-grep 'query' files/"] --> C[HTTP :8089]
-    B["grep ... | jina-grep 'query'"] --> C
-    C --> D["jina-grep serve<br/>(MLX on Metal GPU)"]
-    D --> E["model.py + safetensors<br/>(HuggingFace checkpoints)"]
-```
-
-- Server loads MLX checkpoints directly from HuggingFace repos
-- Cosine similarity computed with NumPy (server returns L2-normalized embeddings)
-- Large inputs auto-batched (256 per request)
-
 ## Benchmark (M3 Ultra)
 
-### v5-small (677M params, 1024 dims)
+### v5-small (677M, 1024d)
 
 ```
 Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s
@@ -123,9 +112,9 @@ Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s
 32x long                     32   19968    810.7    774.0      24631
 ```
 
-Single query: **7ms**. Peak throughput: **25.3K tok/s**. (~1.4x faster than unoptimized)
+Single query: **7ms**. Peak throughput: **25.3K tok/s**.
 
-### v5-nano (239M params, 768 dims)
+### v5-nano (239M, 768d)
 
 ```
 Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s
