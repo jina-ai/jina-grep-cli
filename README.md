@@ -67,6 +67,7 @@ jina-grep serve status
 --threshold     Cosine similarity threshold (default: 0.5)
 --top-k         Max results (default: 10)
 --model         Model name (default: jina-embeddings-v5-small)
+--task          retrieval/text-matching/clustering/classification (default: retrieval)
 --server        Server URL (default: http://localhost:8089)
 --granularity   line/paragraph/sentence (default: line)
 ```

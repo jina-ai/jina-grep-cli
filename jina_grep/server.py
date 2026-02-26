@@ -11,16 +11,14 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 SUPPORTED_MODELS = {
-    "jina-embeddings-v5-small": "jinaai/jina-embeddings-v5-text-small-retrieval",
-    "jina-embeddings-v5-nano": "jinaai/jina-embeddings-v5-text-nano-retrieval",
+    "jina-embeddings-v5-small": "jinaai/jina-embeddings-v5-text-small",
+    "jina-embeddings-v5-nano": "jinaai/jina-embeddings-v5-text-nano",
 }
 
-# v5 retrieval models don't need task routing (single-task checkpoints)
-# but keep the mapping for future multi-task model support
-TASK_MAPPING = {
-    "retrieval.query": "retrieval.query",
-    "retrieval.passage": "retrieval.passage",
-}
+# v5 supported tasks and prompt_names
+# retrieval: query/document | text-matching, clustering, classification: no prompt_name
+VALID_TASKS = {"retrieval", "text-matching", "clustering", "classification"}
+VALID_PROMPT_NAMES = {"query", "document"}  # only for retrieval task
 
 app = FastAPI(title="Jina Grep Embedding Server")
 
@@ -31,7 +29,8 @@ _models: dict = {}
 class EmbeddingRequest(BaseModel):
     input: list[str]
     model: str = "jina-embeddings-v5-small"
-    task: str = "retrieval.query"
+    task: str = "retrieval"
+    prompt_name: Optional[str] = "query"  # query or document, only for retrieval task
 
 
 class EmbeddingData(BaseModel):
@@ -97,8 +96,23 @@ async def create_embeddings(request: EmbeddingRequest):
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+    # Validate task
+    task = request.task
+    if task not in VALID_TASKS:
+        raise HTTPException(status_code=400, detail=f"Invalid task: {task}. Must be one of: {', '.join(VALID_TASKS)}")
+
     try:
-        embeddings = model.encode(request.input, normalize_embeddings=True)
+        encode_kwargs = {"normalize_embeddings": True, "task": task}
+        if task == "retrieval" and request.prompt_name:
+            if request.prompt_name not in VALID_PROMPT_NAMES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid prompt_name: {request.prompt_name}. Must be 'query' or 'document'",
+                )
+            encode_kwargs["prompt_name"] = request.prompt_name
+        embeddings = model.encode(request.input, **encode_kwargs)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Encoding failed: {e}")
 

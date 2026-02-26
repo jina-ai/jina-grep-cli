@@ -44,6 +44,7 @@ class SearchOptions:
     threshold: float = 0.5
     top_k: int = 10
     model: str = "jina-embeddings-v5-small"
+    task: str = "retrieval"
     server_url: str = "http://localhost:8089"
     granularity: str = "line"
 
@@ -67,12 +68,16 @@ class EmbeddingClient:
         self,
         texts: list[str],
         model: str = "jina-embeddings-v5-small",
-        task: str = "retrieval.query",
+        task: str = "retrieval",
+        prompt_name: str = None,
     ) -> np.ndarray:
         """Get embeddings for texts."""
+        payload = {"input": texts, "model": model, "task": task}
+        if prompt_name:
+            payload["prompt_name"] = prompt_name
         response = self.client.post(
             f"{self.server_url}/v1/embeddings",
-            json={"input": texts, "model": model, "task": task},
+            json=payload,
         )
         response.raise_for_status()
         data = response.json()
@@ -167,14 +172,20 @@ def pipe_rerank(
 
     # Embed query
     try:
-        query_emb = client.embed([pattern], model=options.model, task="retrieval.query")[0]
+        query_kwargs = {"task": options.task}
+        if options.task == "retrieval":
+            query_kwargs["prompt_name"] = "query"
+        query_emb = client.embed([pattern], model=options.model, **query_kwargs)[0]
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         return 2
 
     # Embed contents (batch)
     try:
-        content_embs = client.embed(valid_contents, model=options.model, task="retrieval.passage")
+        doc_kwargs = {"task": options.task}
+        if options.task == "retrieval":
+            doc_kwargs["prompt_name"] = "document"
+        content_embs = client.embed(valid_contents, model=options.model, **doc_kwargs)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         return 2
@@ -348,10 +359,13 @@ def search_file(
     chunk_texts = [c[1] for c in chunks]
 
     try:
+        doc_kwargs = {"task": options.task}
+        if options.task == "retrieval":
+            doc_kwargs["prompt_name"] = "document"
         chunk_embeddings = client.embed(
             chunk_texts,
             model=options.model,
-            task="retrieval.passage",
+            **doc_kwargs,
         )
     except Exception:
         return []
@@ -471,7 +485,10 @@ def semantic_grep(
         return 2
 
     try:
-        query_embedding = client.embed([pattern], model=options.model, task="retrieval.query")[0]
+        query_kwargs = {"task": options.task}
+        if options.task == "retrieval":
+            query_kwargs["prompt_name"] = "query"
+        query_embedding = client.embed([pattern], model=options.model, **query_kwargs)[0]
     except Exception as e:
         if not options.quiet:
             print(f"Error getting query embedding: {e}", file=sys.stderr)

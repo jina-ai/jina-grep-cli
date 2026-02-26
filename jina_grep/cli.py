@@ -71,6 +71,7 @@ def grep_main(args=None):
     @click.option("--threshold", type=float, default=0.5, help="Similarity threshold (default: 0.5)")
     @click.option("--top-k", type=int, default=10, help="Max results (default: 10)")
     @click.option("--model", default="jina-embeddings-v5-small", help="Model name")
+    @click.option("--task", type=click.Choice(["retrieval", "text-matching", "clustering", "classification"]), default="retrieval", help="Embedding task (default: retrieval)")
     @click.option("--server", default="http://localhost:8089", help="Server URL")
     @click.option("--granularity", type=click.Choice(["line", "paragraph", "sentence"]), default="line")
     @click.argument("pattern")
@@ -79,7 +80,7 @@ def grep_main(args=None):
         recursive, files_with_matches, files_without_match, count, line_number,
         with_filename, no_filename, after_context, before_context, context,
         include, exclude, exclude_dir, color, invert_match, max_count, quiet,
-        threshold, top_k, model, server, granularity, pattern, files,
+        threshold, top_k, model, task, server, granularity, pattern, files,
     ):
         """Semantic grep using Jina embeddings.
 
@@ -132,6 +133,7 @@ def grep_main(args=None):
             threshold=threshold,
             top_k=top_k,
             model=model,
+            task=task,
             server_url=server,
             granularity=granularity,
         )
