@@ -484,6 +484,134 @@ def format_result(result: SearchResult, options: SearchOptions) -> str:
     return "\n".join(output_lines)
 
 
+def semantic_classify(
+    labels: list[str],
+    paths: list[Path],
+    options: SearchOptions,
+    only_matching: bool = False,
+) -> int:
+    """Zero-shot classification: assign best label to each line/chunk."""
+    client = EmbeddingClient(options.server_url)
+
+    if not client.health_check():
+        if not options.quiet:
+            print(
+                f"Error: Cannot connect to embedding server at {options.server_url}",
+                file=sys.stderr,
+            )
+            print("Start the server with: jina-grep serve start", file=sys.stderr)
+        return 2
+
+    # Embed all labels
+    try:
+        label_embs = client.embed(labels, model=options.model, task="classification")
+    except Exception as e:
+        if not options.quiet:
+            print(f"Error embedding labels: {e}", file=sys.stderr)
+        return 2
+
+    files = list(get_files(paths, options))
+    if not files:
+        if not options.quiet:
+            print("No files to search", file=sys.stderr)
+        return 1
+
+    has_output = False
+
+    if options.count:
+        # Count mode: tally per label
+        label_counts = {label: 0 for label in labels}
+
+    for filepath in files:
+        content = read_file_safely(filepath)
+        if content is None:
+            continue
+
+        chunks = split_into_chunks(content, options.granularity)
+        if not chunks:
+            continue
+
+        chunk_texts = [c[1] for c in chunks]
+
+        try:
+            chunk_embs = client.embed(chunk_texts, model=options.model, task="classification")
+        except Exception:
+            continue
+
+        # Compute similarity: each chunk against all labels
+        # chunk_embs: [N, D], label_embs: [L, D]
+        chunk_norm = chunk_embs / (np.linalg.norm(chunk_embs, axis=-1, keepdims=True) + 1e-9)
+        label_norm = label_embs / (np.linalg.norm(label_embs, axis=-1, keepdims=True) + 1e-9)
+        scores_matrix = np.dot(chunk_norm, label_norm.T)  # [N, L]
+
+        for idx, (line_num, chunk_text) in enumerate(chunks):
+            best_label_idx = int(np.argmax(scores_matrix[idx]))
+            best_score = float(scores_matrix[idx, best_label_idx])
+            best_label = labels[best_label_idx]
+
+            if best_score < options.threshold:
+                continue
+
+            has_output = True
+
+            if options.quiet:
+                continue
+
+            if options.count:
+                label_counts[best_label] += 1
+                continue
+
+            if only_matching:
+                print(best_label)
+                continue
+
+            # Format output: filepath:linenum:content [label:score]
+            parts = []
+            if options.with_filename:
+                if options.color:
+                    parts.append(f"\033[35m{filepath}\033[0m")
+                else:
+                    parts.append(str(filepath))
+            if options.line_number:
+                if options.color:
+                    parts.append(f"\033[32m{line_num}\033[0m")
+                else:
+                    parts.append(str(line_num))
+
+            prefix = ":".join(parts) + ":" if parts else ""
+            line_display = f"\033[1m{chunk_text}\033[0m" if options.color else chunk_text
+
+            # Show all label scores
+            all_scores = []
+            for li, label in enumerate(labels):
+                s = float(scores_matrix[idx, li])
+                if li == best_label_idx:
+                    if options.color:
+                        all_scores.append(f"\033[1;33m{label}:{s:.3f}\033[0m")
+                    else:
+                        all_scores.append(f"{label}:{s:.3f}")
+                else:
+                    if options.color:
+                        all_scores.append(f"\033[2m{label}:{s:.3f}\033[0m")
+                    else:
+                        all_scores.append(f"{label}:{s:.3f}")
+
+            score_str = "  [" + " ".join(all_scores) + "]"
+            print(f"{prefix}{line_display}{score_str}")
+
+    client.close()
+
+    if options.quiet:
+        return 0 if has_output else 1
+
+    if options.count:
+        for label, cnt in sorted(label_counts.items(), key=lambda x: -x[1]):
+            print(f"{label}: {cnt}")
+        return 0 if has_output else 1
+
+    return 0 if has_output else 1
+
+
 def semantic_grep(
     pattern: str,
     paths: list[Path],

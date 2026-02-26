@@ -2,7 +2,7 @@
 
 Semantic grep powered by Jina embeddings v5, running locally on Apple Silicon via MLX.
 
-Two modes: pipe grep output for semantic reranking, or search files directly with natural language.
+Three modes: pipe grep output for semantic reranking, search files directly with natural language, or zero-shot classification.
 
 ```mermaid
 graph LR
@@ -53,6 +53,32 @@ grep -rn "TODO" . | jina-grep "performance optimization"
 jina-grep "memory leak" src/
 jina-grep -r --threshold 0.3 "database connection pooling" .
 jina-grep --top-k 5 "retry with exponential backoff" *.py
+```
+
+### Zero-shot classification
+
+Use `-e` to specify labels. Each line gets classified to the best matching label.
+
+```bash
+# Classify code by category
+jina-grep -e "database" -e "error handling" -e "data processing" -e "configuration" src/
+
+# Read labels from file
+echo -e "bug\nfeature\nrefactor\ndocs" > labels.txt
+jina-grep -f labels.txt src/
+
+# Output only the label (pipe-friendly)
+jina-grep -o -e "positive" -e "negative" -e "neutral" reviews.txt
+
+# Count per label
+jina-grep -c -e "bug" -e "feature" -e "docs" src/
+```
+
+Output shows all label scores, best label highlighted:
+
+```
+src/main.py:10:def handle_error(error_code, message):  [error handling:0.744 data processing:0.756 ...]
+src/config.py:1:# Configuration settings  [configuration:0.210 database:0.217 ...]
 ```
 
 ### Server management

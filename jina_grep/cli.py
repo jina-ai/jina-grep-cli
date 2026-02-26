@@ -5,7 +5,7 @@ from pathlib import Path
 
 import click
 
-from .client import SearchOptions, pipe_rerank, semantic_grep
+from .client import SearchOptions, pipe_rerank, semantic_grep, semantic_classify
 from .server import server_status, start_server, stop_server
 
 
@@ -68,19 +68,23 @@ def grep_main(args=None):
     @click.option("-v", "--invert-match", is_flag=True, help="Invert match (lowest similarity)")
     @click.option("-m", "--max-count", type=int, help="Max matches per file")
     @click.option("-q", "--quiet", is_flag=True, help="Quiet mode")
+    @click.option("-o", "--only-matching", is_flag=True, help="Print only matching label (classification mode)")
+    @click.option("-e", "--regexp", multiple=True, help="Classification labels (multiple -e for zero-shot classification)")
+    @click.option("-f", "--file", "label_file", type=click.Path(exists=True), help="Read classification labels from file (one per line)")
     @click.option("--threshold", type=float, default=0.5, help="Similarity threshold (default: 0.5)")
     @click.option("--top-k", type=int, default=10, help="Max results (default: 10)")
     @click.option("--model", default="jina-embeddings-v5-small", help="Model name")
-    @click.option("--task", type=click.Choice(["retrieval", "text-matching", "clustering", "classification"]), default="retrieval", help="Embedding task (default: retrieval)")
+    @click.option("--task", type=click.Choice(["retrieval", "text-matching", "clustering", "classification"]), default=None, help="Embedding task (auto-detected)")
     @click.option("--server", default="http://localhost:8089", help="Server URL")
     @click.option("--granularity", type=click.Choice(["line", "paragraph", "sentence"]), default="line")
-    @click.argument("pattern")
+    @click.argument("pattern", required=False, default=None)
     @click.argument("files", nargs=-1, type=click.Path())
     def _grep(
         recursive, files_with_matches, files_without_match, count, line_number,
         with_filename, no_filename, after_context, before_context, context,
         include, exclude, exclude_dir, color, invert_match, max_count, quiet,
-        threshold, top_k, model, task, server, granularity, pattern, files,
+        only_matching, regexp, label_file, threshold, top_k, model, task,
+        server, granularity, pattern, files,
     ):
         """Semantic grep using Jina embeddings.
 
@@ -96,11 +100,78 @@ def grep_main(args=None):
             jina-grep -r --threshold=0.6 "database connection" .
 
         \b
+        Zero-shot classification:
+            jina-grep -e "bug" -e "feature" -e "docs" src/
+            jina-grep -f labels.txt src/
+
+        \b
         Server:
             jina-grep serve start    Start embedding server
             jina-grep serve stop     Stop embedding server
             jina-grep serve status   Check server status
         """
+        # Collect labels from -e and -f
+        labels = list(regexp)
+        if label_file:
+            with open(label_file) as lf:
+                labels.extend(line.strip() for line in lf if line.strip())
+
+        # Classification mode: multiple labels provided
+        if labels:
+            if not files and pattern:
+                # pattern is actually a file path
+                files = (pattern,) + files if pattern else files
+                if pattern:
+                    files = (pattern,)
+            elif not files:
+                files = (".",)
+
+            use_color = color == "always" or (color == "auto" and sys.stdout.isatty())
+            show_fn = not no_filename and (with_filename or len(files) > 1 or recursive)
+
+            classify_options = SearchOptions(
+                recursive=recursive,
+                files_with_matches=files_with_matches,
+                files_without_match=files_without_match,
+                count=count,
+                line_number=line_number,
+                with_filename=show_fn,
+                after_context=after_context if context == 0 else context,
+                before_context=before_context if context == 0 else context,
+                include_patterns=list(include),
+                exclude_patterns=list(exclude),
+                exclude_dir_patterns=list(exclude_dir),
+                color=use_color,
+                invert_match=invert_match,
+                max_count=max_count,
+                quiet=quiet,
+                threshold=threshold,
+                top_k=top_k,
+                model=model,
+                task="classification",
+                server_url=server,
+                granularity=granularity,
+            )
+
+            paths = []
+            for f in files:
+                p = Path(f)
+                if not p.exists():
+                    print(f"jina-grep: {f}: No such file or directory", file=sys.stderr)
+                    continue
+                paths.append(p)
+
+            if not paths:
+                sys.exit(2)
+
+            exit_code = semantic_classify(labels, paths, classify_options, only_matching=only_matching)
+            sys.exit(exit_code)
+
+        # Standard grep mode requires a pattern
+        if not pattern:
+            print("Error: PATTERN is required (or use -e for classification)", file=sys.stderr)
+            sys.exit(2)
+
         if no_filename:
             show_filename = False
         elif with_filename is not None:
@@ -133,7 +204,7 @@ def grep_main(args=None):
             threshold=threshold,
             top_k=top_k,
             model=model,
-            task=task,
+            task=task or "retrieval",
             server_url=server,
             granularity=granularity,
         )
