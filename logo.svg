@@ -1,21 +1,59 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="4 4 56 56" width="64" height="64">
-  <!-- Magnifying glass body -->
-  <circle cx="26" cy="26" r="16" fill="#FFF3E0" stroke="#FF9800" stroke-width="3"/>
-  <!-- Glass shine -->
-  <ellipse cx="21" cy="21" rx="5" ry="4" fill="white" opacity="0.6" transform="rotate(-20 21 21)"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges">
+  <!-- Pixel art hedgehog with magnifying glass, 16x16 grid -->
+  <!-- Spikes -->
+  <rect x="4" y="1" width="1" height="1" fill="#8B5E3C"/>
+  <rect x="6" y="0" width="1" height="1" fill="#8B5E3C"/>
+  <rect x="8" y="1" width="1" height="1" fill="#8B5E3C"/>
+  <rect x="3" y="2" width="1" height="1" fill="#8B5E3C"/>
+  <rect x="5" y="1" width="1" height="1" fill="#8B5E3C"/>
+  <rect x="7" y="0" width="1" height="1" fill="#8B5E3C"/>
+  <rect x="9" y="2" width="1" height="1" fill="#8B5E3C"/>
+  
+  <!-- Head/body -->
+  <rect x="4" y="2" width="5" height="1" fill="#D4A03C"/>
+  <rect x="3" y="3" width="7" height="1" fill="#D4A03C"/>
+  <rect x="3" y="4" width="7" height="1" fill="#D4A03C"/>
+  <rect x="3" y="5" width="7" height="1" fill="#D4A03C"/>
+  <rect x="4" y="6" width="5" height="1" fill="#D4A03C"/>
+  <rect x="4" y="7" width="5" height="1" fill="#D4A03C"/>
+  
+  <!-- Belly -->
+  <rect x="5" y="5" width="3" height="2" fill="#FFF3E0"/>
+  
+  <!-- Eyes -->
+  <rect x="4" y="3" width="1" height="1" fill="#111"/>
+  <rect x="7" y="3" width="1" height="1" fill="#111"/>
+  <!-- Eye shine -->
+  <rect x="4" y="3" width="1" height="1" fill="#111"/>
+  <rect x="7" y="3" width="1" height="1" fill="#111"/>
+  
+  <!-- Nose -->
+  <rect x="6" y="4" width="1" height="1" fill="#333"/>
+  
+  <!-- Cheeks -->
+  <rect x="3" y="4" width="1" height="1" fill="#FFAB91" opacity="0.6"/>
+  <rect x="8" y="4" width="1" height="1" fill="#FFAB91" opacity="0.6"/>
+  
+  <!-- Feet -->
+  <rect x="4" y="8" width="2" height="1" fill="#C88B2E"/>
+  <rect x="7" y="8" width="2" height="1" fill="#C88B2E"/>
+  
+  <!-- Magnifying glass -->
+  <!-- Ring -->
+  <rect x="11" y="2" width="1" height="1" fill="#FF9800"/>
+  <rect x="12" y="1" width="2" height="1" fill="#FF9800"/>
+  <rect x="14" y="2" width="1" height="1" fill="#FF9800"/>
+  <rect x="14" y="3" width="1" height="1" fill="#FF9800"/>
+  <rect x="14" y="4" width="1" height="1" fill="#FF9800"/>
+  <rect x="12" y="5" width="2" height="1" fill="#FF9800"/>
+  <rect x="11" y="3" width="1" height="1" fill="#FF9800"/>
+  <rect x="11" y="4" width="1" height="1" fill="#FF9800"/>
+  <!-- Glass fill -->
+  <rect x="12" y="2" width="2" height="3" fill="#E3F2FD" opacity="0.5"/>
   <!-- Handle -->
-  <line x1="38" y1="38" x2="54" y2="54" stroke="#FF9800" stroke-width="5" stroke-linecap="round"/>
-  <!-- Cute face on glass -->
-  <circle cx="21" cy="27" r="2.5" fill="#333"/>
-  <circle cx="31" cy="27" r="2.5" fill="#333"/>
-  <circle cx="20" cy="26" r="1" fill="white"/>
-  <circle cx="30" cy="26" r="1" fill="white"/>
-  <!-- Smile -->
-  <path d="M22 31 Q26 35 30 31" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
-  <!-- Blush -->
-  <ellipse cx="19" cy="30" rx="2.5" ry="1.5" fill="#FFAB91" opacity="0.6"/>
-  <ellipse cx="33" cy="30" rx="2.5" ry="1.5" fill="#FFAB91" opacity="0.6"/>
-  <!-- Sparkles -->
-  <text x="44" y="14" font-size="10" fill="#FFD54F">&#x2726;</text>
-  <text x="8" y="10" font-size="8" fill="#FFD54F">&#x2726;</text>
+  <rect x="10" y="6" width="1" height="1" fill="#FF9800"/>
+  <rect x="9" y="7" width="1" height="1" fill="#FF9800"/>
+  
+  <!-- Arm reaching to glass -->
+  <rect x="9" y="5" width="2" height="1" fill="#D4A03C"/>
 </svg>
