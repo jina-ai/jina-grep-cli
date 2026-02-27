@@ -106,7 +106,7 @@ class SearchOptions:
     model: str = "jina-embeddings-v5-small"
     task: str = "retrieval"
     server_url: str = "http://localhost:8089"
-    granularity: str = "paragraph"
+    granularity: str = "token"
 
     def __post_init__(self):
         if self.include_patterns is None:
@@ -310,11 +310,24 @@ def pipe_rerank(
 # Standalone mode: read files directly, semantic search
 # ---------------------------------------------------------------------------
 
+def _estimate_tokens(text: str) -> int:
+    """Rough token estimate: ~4 chars per token for English, ~2 for CJK."""
+    return max(1, len(text) // 3)
+
+
 def split_into_chunks(
     content: str,
-    granularity: str = "paragraph",
+    granularity: str = "token",
+    chunk_tokens: int = 512,
 ) -> list[tuple[int, str]]:
-    """Split content into chunks with line numbers (1-indexed)."""
+    """Split content into chunks with line numbers (1-indexed).
+    
+    Granularity modes:
+    - line: one chunk per non-empty line
+    - paragraph: split on blank lines
+    - sentence: split on sentence-ending punctuation
+    - token: fixed token window (default 512 tokens), split at line boundaries
+    """
     lines = content.splitlines()
 
     if granularity == "line":
@@ -344,11 +357,34 @@ def split_into_chunks(
         for i, line in enumerate(lines):
             if not line.strip():
                 continue
-            # Split on sentence-ending punctuation (English and CJK)
             sentences = re.split(r"(?<=[.!?。！？])\s*", line)
             for sentence in sentences:
                 if sentence.strip():
                     chunks.append((i + 1, sentence.strip()))
+        return chunks
+
+    elif granularity == "token":
+        chunks = []
+        current_chunk = []
+        current_tokens = 0
+        start_line = 1
+
+        for i, line in enumerate(lines):
+            if not line.strip():
+                continue
+            line_tokens = _estimate_tokens(line)
+            if current_chunk and current_tokens + line_tokens > chunk_tokens:
+                chunks.append((start_line, "\n".join(current_chunk)))
+                current_chunk = []
+                current_tokens = 0
+            if not current_chunk:
+                start_line = i + 1
+            current_chunk.append(line)
+            current_tokens += line_tokens
+
+        if current_chunk:
+            chunks.append((start_line, "\n".join(current_chunk)))
+
         return chunks
 
     else:
