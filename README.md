@@ -40,6 +40,8 @@ jina-grep serve stop    # stop when done
 
 Serverless mode auto-detects a running persistent server and uses it via HTTP (without stopping it afterwards).
 
+![Latency breakdown](https://raw.githubusercontent.com/jina-ai/jina-grep-cli/refs/heads/main/grep-latency-gantt.png)
+
 ### Pipe mode: rerank grep output
 
 ```bash
