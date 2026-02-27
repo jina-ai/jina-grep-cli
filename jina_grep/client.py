@@ -66,14 +66,7 @@ def _cleanup_auto_server():
         pid = _auto_started_pid
         _auto_started_pid = None
         try:
-            os.kill(pid, signal.SIGTERM)
-            # Wait for server to actually exit (avoid race with next invocation)
-            for _ in range(50):
-                time.sleep(0.05)
-                try:
-                    os.kill(pid, 0)  # check if still alive
-                except OSError:
-                    break  # process exited
+            os.kill(pid, signal.SIGKILL)
         except OSError:
             pass
 
