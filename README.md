@@ -12,7 +12,7 @@ Four modes: pipe grep output for semantic reranking, search files directly with 
 | jina-code-embeddings-1.5b | 1.54B | 1536 | 32768 | 128-1536 | nl2code, code2code, code2nl, code2completion, qa |
 | jina-code-embeddings-0.5b | 0.49B | 896 | 32768 | 64-896 | nl2code, code2code, code2nl, code2completion, qa |
 
-Per-task MLX checkpoints (v5) or single checkpoint with instruction prefixes (code) loaded on demand from HuggingFace. No PyTorch, no transformers - pure MLX on Metal GPU.
+Unified MLX checkpoints with dynamic LoRA adapter switching (v5) or single checkpoint with instruction prefixes (code). One base model in memory for all tasks, adapter switching in 20ms. No PyTorch, no transformers - pure MLX on Metal GPU.
 
 ## Install
 
