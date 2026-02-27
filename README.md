@@ -139,7 +139,7 @@ Grep-compatible flags:
 Semantic flags:
   --threshold     Cosine similarity threshold (default: 0.5)
   --top-k         Max results (default: 10)
-  --model         Model name (default: jina-embeddings-v5-small)
+  --model         Model name (default: jina-embeddings-v5-nano)
   --task          v5: retrieval/text-matching/clustering/classification
                   code: nl2code/code2code/code2nl/code2completion/qa
   --server        Server URL (default: http://localhost:8089)

@@ -19,6 +19,7 @@ def _snapshot_download(repo_id: str) -> str:
     try:
         return snapshot_download(repo_id, local_files_only=True)
     except Exception:
+        print("Downloading model for first time...", file=sys.stderr, flush=True)
         return snapshot_download(repo_id)
 
 # Unified MLX repos with dynamic LoRA adapter switching
@@ -134,7 +135,7 @@ class LocalEmbedder:
     def embed(
         self,
         texts: list[str],
-        model: str = "jina-embeddings-v5-small",
+        model: str = "jina-embeddings-v5-nano",
         task: str = "retrieval",
         prompt_name: str = None,
         batch_size: int = 256,

@@ -28,7 +28,7 @@ app = FastAPI(title="Jina Grep Embedding Server")
 
 class EmbeddingRequest(BaseModel):
     input: list[str]
-    model: str = "jina-embeddings-v5-small"
+    model: str = "jina-embeddings-v5-nano"
     task: str = "retrieval"
     prompt_name: Optional[str] = "query"
     truncate_dim: Optional[int] = None

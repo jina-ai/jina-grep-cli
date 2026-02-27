@@ -57,7 +57,7 @@ class SearchOptions:
     quiet: bool = False
     threshold: float = 0.5
     top_k: int = 10
-    model: str = "jina-embeddings-v5-small"
+    model: str = "jina-embeddings-v5-nano"
     task: str = "retrieval"
     server_url: str = "http://localhost:8089"
     granularity: str = "token"
@@ -82,7 +82,7 @@ class EmbeddingClient:
     def embed(
         self,
         texts: list[str],
-        model: str = "jina-embeddings-v5-small",
+        model: str = "jina-embeddings-v5-nano",
         task: str = "retrieval",
         prompt_name: str = None,
         batch_size: int = 256,
