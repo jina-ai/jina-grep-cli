@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from .embedder import (
     MLX_MODELS,
     CODE_MODELS,
+    CODE_MODELS_MAP,
     MATRYOSHKA_DIMS,
     VALID_TASKS,
     CODE_TASKS,
@@ -81,7 +82,7 @@ async def create_embeddings(request: EmbeddingRequest):
         )
 
     try:
-        model, tokenizer = get_model(request.model, task)
+        cached = get_model(request.model, task)
     except (ValueError, RuntimeError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -89,7 +90,8 @@ async def create_embeddings(request: EmbeddingRequest):
         import mlx.core as mx
 
         if is_code:
-            # Code models: task + prompt_type
+            # Code models: (model, tokenizer) tuple
+            model, tokenizer = cached
             prompt_type = request.prompt_name or "query"
             if prompt_type == "document":
                 prompt_type = "passage"
@@ -101,7 +103,10 @@ async def create_embeddings(request: EmbeddingRequest):
                 truncate_dim=request.truncate_dim,
             )
         else:
-            # v5 models: task_type string
+            # v5 models: JinaMultiTaskModel with dynamic LoRA
+            multi_model = cached
+            multi_model.switch_task(task)
+
             if task == "retrieval":
                 prompt_name = request.prompt_name or "query"
                 if prompt_name not in VALID_PROMPT_NAMES:
@@ -109,11 +114,9 @@ async def create_embeddings(request: EmbeddingRequest):
                 task_type = f"retrieval.{prompt_name}" if prompt_name == "query" else "retrieval.passage"
             else:
                 task_type = task
-            embeddings = model.encode(
+            embeddings = multi_model.encode(
                 request.input,
-                tokenizer,
                 task_type=task_type,
-                truncate_dim=request.truncate_dim,
             )
         mx.eval(embeddings)
         embeddings = embeddings.tolist()
@@ -142,7 +145,10 @@ async def health():
 @app.get("/models")
 async def list_models():
     return {
-        "models": {name: list(tasks.keys()) for name, tasks in MLX_MODELS.items()},
+        "models": {
+            **{name: list(VALID_TASKS) for name in MLX_MODELS},
+            **{name: list(CODE_TASKS) for name in CODE_MODELS_MAP},
+        },
         "matryoshka_dims": sorted(MATRYOSHKA_DIMS),
         "max_seq_length": MAX_SEQ_LENGTH,
     }

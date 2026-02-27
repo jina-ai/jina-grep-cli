@@ -11,31 +11,19 @@ from typing import Optional
 
 import numpy as np
 
-# MLX checkpoints per model and task
+# Unified MLX repos with dynamic LoRA adapter switching
 MLX_MODELS = {
-    "jina-embeddings-v5-small": {
-        "retrieval": "jinaai/jina-embeddings-v5-text-small-retrieval-mlx",
-        "text-matching": "jinaai/jina-embeddings-v5-text-small-text-matching-mlx",
-        "clustering": "jinaai/jina-embeddings-v5-text-small-clustering-mlx",
-        "classification": "jinaai/jina-embeddings-v5-text-small-classification-mlx",
-    },
-    "jina-embeddings-v5-nano": {
-        "retrieval": "jinaai/jina-embeddings-v5-text-nano-retrieval-mlx",
-        "text-matching": "jinaai/jina-embeddings-v5-text-nano-text-matching-mlx",
-        "clustering": "jinaai/jina-embeddings-v5-text-nano-clustering-mlx",
-        "classification": "jinaai/jina-embeddings-v5-text-nano-classification-mlx",
-    },
-    # Code models: single checkpoint, task handled via instruction prefix
-    "jina-code-embeddings-0.5b": {
-        "_all": "jinaai/jina-code-embeddings-0.5b-mlx",
-    },
-    "jina-code-embeddings-1.5b": {
-        "_all": "jinaai/jina-code-embeddings-1.5b-mlx",
-    },
+    "jina-embeddings-v5-small": "jinaai/jina-embeddings-v5-text-small-mlx",
+    "jina-embeddings-v5-nano": "jinaai/jina-embeddings-v5-text-nano-mlx",
 }
 
-# Code model names for dispatch
-CODE_MODELS = {"jina-code-embeddings-0.5b", "jina-code-embeddings-1.5b"}
+# Code models: single checkpoint, no LoRA switching
+CODE_MODELS_MAP = {
+    "jina-code-embeddings-0.5b": "jinaai/jina-code-embeddings-0.5b-mlx",
+    "jina-code-embeddings-1.5b": "jinaai/jina-code-embeddings-1.5b-mlx",
+}
+
+CODE_MODELS = set(CODE_MODELS_MAP.keys())
 
 # Supported Matryoshka dimensions
 MATRYOSHKA_DIMS = {32, 64, 128, 256, 512, 768, 1024}
@@ -52,20 +40,25 @@ MAX_SEQ_LENGTH = {
     "jina-embeddings-v5-nano": 8192,
 }
 
-# Global model cache: key = (model_name, task) -> (model, tokenizer)
+# Global model cache: key = model_name -> JinaMultiTaskModel or (code_model, tokenizer)
 _models: dict = {}
 
 _first_load = True
 
 
 def get_model(model_name: str, task: str):
-    """Load or retrieve cached MLX model and tokenizer for given task."""
+    """Load or retrieve cached MLX model for the given model name.
+
+    For v5 models, returns a JinaMultiTaskModel with dynamic adapter switching.
+    For code models, returns (model, tokenizer) tuple.
+    """
     global _first_load
 
-    if model_name not in MLX_MODELS:
-        raise ValueError(f"Unsupported model: {model_name}. Supported: {', '.join(MLX_MODELS)}")
-
     is_code = model_name in CODE_MODELS
+
+    if not is_code and model_name not in MLX_MODELS:
+        raise ValueError(f"Unsupported model: {model_name}. Supported: {', '.join(list(MLX_MODELS) + list(CODE_MODELS_MAP))}")
+
     if is_code:
         if task not in CODE_TASKS:
             raise ValueError(f"Unsupported task for code model: {task}. Supported: {', '.join(CODE_TASKS)}")
@@ -73,50 +66,58 @@ def get_model(model_name: str, task: str):
         if task not in VALID_TASKS:
             raise ValueError(f"Unsupported task: {task}. Supported: {', '.join(VALID_TASKS)}")
 
-    # Code models use single checkpoint for all tasks
-    cache_key = (model_name, "_all") if is_code else (model_name, task)
-    if cache_key not in _models:
+    if model_name not in _models:
         if _first_load:
             print("Loading model...", file=sys.stderr, flush=True)
             _first_load = False
 
-        import importlib.util
-        import json
+        if is_code:
+            import importlib.util
+            import json
 
-        import mlx.core as mx
-        from huggingface_hub import snapshot_download
-        from tokenizers import Tokenizer
+            import mlx.core as mx
+            from huggingface_hub import snapshot_download
+            from tokenizers import Tokenizer
 
-        hf_name = MLX_MODELS[model_name]["_all"] if is_code else MLX_MODELS[model_name][task]
+            model_dir = snapshot_download(CODE_MODELS_MAP[model_name])
 
-        # Download all model files
-        model_dir = snapshot_download(hf_name)
+            with open(os.path.join(model_dir, "config.json")) as f:
+                config = json.load(f)
 
-        # Load config
-        with open(os.path.join(model_dir, "config.json")) as f:
-            config = json.load(f)
+            spec = importlib.util.spec_from_file_location(
+                f"jina_mlx_model_{model_name}",
+                os.path.join(model_dir, "model.py"),
+            )
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
 
-        # Import model.py from the downloaded repo
-        spec = importlib.util.spec_from_file_location(
-            f"jina_mlx_model_{model_name}",
-            os.path.join(model_dir, "model.py"),
-        )
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
+            model = mod.JinaCodeEmbeddingModel(config)
+            weights = mx.load(os.path.join(model_dir, "model.safetensors"))
+            model.load_weights(list(weights.items()))
+            mx.eval(model.parameters())
 
-        # Create model and load weights
-        model_class = mod.JinaCodeEmbeddingModel if is_code else mod.JinaEmbeddingModel
-        model = model_class(config)
-        weights = mx.load(os.path.join(model_dir, "model.safetensors"))
-        model.load_weights(list(weights.items()))
-        mx.eval(model.parameters())
+            tokenizer = Tokenizer.from_file(os.path.join(model_dir, "tokenizer.json"))
+            _models[model_name] = (model, tokenizer)
+        else:
+            # v5 models: use unified repo with dynamic LoRA
+            from huggingface_hub import snapshot_download
 
-        # Load tokenizer
-        tokenizer = Tokenizer.from_file(os.path.join(model_dir, "tokenizer.json"))
+            model_dir = snapshot_download(MLX_MODELS[model_name])
 
-        _models[cache_key] = (model, tokenizer)
+            # Import utils.py from the downloaded repo
+            import importlib.util
 
-    return _models[cache_key]
+            spec = importlib.util.spec_from_file_location(
+                f"jina_mlx_utils_{model_name}",
+                os.path.join(model_dir, "utils.py"),
+            )
+            utils_mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(utils_mod)
+
+            multi_model = utils_mod.load_model(model_dir)
+            _models[model_name] = multi_model
+
+    return _models[model_name]
 
 
 class LocalEmbedder:
@@ -133,10 +134,11 @@ class LocalEmbedder:
         """Get embeddings for texts using in-process MLX inference."""
         import mlx.core as mx
 
-        model_obj, tokenizer = get_model(model, task)
+        cached = get_model(model, task)
         is_code = model in CODE_MODELS
 
         if is_code:
+            model_obj, tokenizer = cached
             prompt_type = prompt_name or "query"
             if prompt_type == "document":
                 prompt_type = "passage"
@@ -147,6 +149,10 @@ class LocalEmbedder:
                 prompt_type=prompt_type,
             )
         else:
+            # JinaMultiTaskModel with dynamic LoRA switching
+            multi_model = cached
+            multi_model.switch_task(task)
+
             if task == "retrieval":
                 pn = prompt_name or "query"
                 if pn not in VALID_PROMPT_NAMES:
@@ -154,11 +160,8 @@ class LocalEmbedder:
                 task_type = f"retrieval.{pn}" if pn == "query" else "retrieval.passage"
             else:
                 task_type = task
-            embeddings = model_obj.encode(
-                texts,
-                tokenizer,
-                task_type=task_type,
-            )
+
+            embeddings = multi_model.encode(texts, task_type=task_type)
 
         mx.eval(embeddings)
         return np.array(embeddings.tolist())
