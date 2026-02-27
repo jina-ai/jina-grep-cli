@@ -1,6 +1,9 @@
 """In-process MLX embedding for serverless mode."""
 
 import os
+
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+
 import sys
 from typing import Optional
 

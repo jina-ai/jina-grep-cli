@@ -12,7 +12,7 @@ Four modes: pipe grep output for semantic reranking, search files directly with 
 | jina-code-embeddings-1.5b | 1.54B | 1536 | 32768 | 128-1536 | nl2code, code2code, code2nl, code2completion, qa |
 | jina-code-embeddings-0.5b | 0.49B | 896 | 32768 | 64-896 | nl2code, code2code, code2nl, code2completion, qa |
 
-Per-task MLX checkpoints (v5) or single checkpoint with instruction prefixes (code) loaded on demand from HuggingFace. No PyTorch, no transformers - pure MLX on Metal GPU. Server auto-batches large inputs (up to 256 per request).
+Per-task MLX checkpoints (v5) or single checkpoint with instruction prefixes (code) loaded on demand from HuggingFace. No PyTorch, no transformers - pure MLX on Metal GPU.
 
 ## Install
 
@@ -26,11 +26,11 @@ Requirements: Python 3.10+, Apple Silicon Mac.
 
 ## Usage
 
-Two server modes, both transparent to the user:
+Two modes:
 
-**Auto mode (default, aka serverless):** The embedding server starts on demand and stops after each invocation. No setup, no background processes, no memory footprint when idle. The first run downloads models from HuggingFace (~1-3GB depending on model). This works well because MLX loads weights via mmap - macOS keeps the file in page cache after the process exits, so subsequent runs reload the model in ~100ms instead of ~15s. Best for: occasional use, scripts, CI.
+**Serverless (default):** Model loads in-process, runs the query, exits. No server, no background processes. MLX loads weights via mmap, so macOS keeps them in page cache after exit - subsequent runs reload in ~100ms instead of ~15s. Best for: occasional use, scripts, CI.
 
-**Persistent mode:** Keep the server running across invocations. The model stays loaded in GPU memory - every query is a direct embed call with zero startup cost. Avoids the ~15s cold start entirely and eliminates the ~0.9s warm overhead per call. Best for: interactive sessions, rapid iteration, heavy batch workloads.
+**Persistent server:** Keep a server running across invocations. Model stays in GPU memory, every query is ~10ms. Best for: interactive sessions, batch workloads.
 
 ```bash
 jina-grep serve start   # keep running in background
@@ -38,9 +38,7 @@ jina-grep serve start   # keep running in background
 jina-grep serve stop    # stop when done
 ```
 
-Auto mode detects a running persistent server and reuses it (without stopping it afterwards).
-
-![Latency breakdown](https://raw.githubusercontent.com/jina-ai/jina-grep-cli/refs/heads/main/grep-latency-gantt.png)
+Serverless mode auto-detects a running persistent server and uses it via HTTP (without stopping it afterwards).
 
 ### Pipe mode: rerank grep output
 
