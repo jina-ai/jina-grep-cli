@@ -6,6 +6,11 @@ os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"  # suppress tokenizers warning
 
+# Remove SOCKS proxy env vars that break httpx (used by huggingface_hub)
+for _proxy_key in ("ALL_PROXY", "all_proxy", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+    if _proxy_key in os.environ and "socks" in os.environ[_proxy_key].lower():
+        del os.environ[_proxy_key]
+
 import sys
 from typing import Optional
 
