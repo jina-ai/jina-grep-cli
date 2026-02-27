@@ -79,8 +79,11 @@ def get_model(model_name: str, task: str):
 
     if model_name not in _models:
         if _first_load:
-            print("Loading model...", file=sys.stderr, flush=True)
+            print("Loading model...", end="", file=sys.stderr, flush=True)
             _first_load = False
+            _print_done = True
+        else:
+            _print_done = False
 
         if is_code:
             import importlib.util
@@ -125,6 +128,9 @@ def get_model(model_name: str, task: str):
 
             multi_model = utils_mod.load_model(model_dir)
             _models[model_name] = multi_model
+
+        if _print_done:
+            print(" done", file=sys.stderr, flush=True)
 
     return _models[model_name]
 
