@@ -26,18 +26,21 @@ Requirements: Python 3.10+, Apple Silicon Mac.
 
 ## Usage
 
-No setup needed. The embedding server starts and stops automatically per invocation. Models are downloaded from HuggingFace on first use (~1-3GB depending on model).
+Two server modes, both transparent to the user:
 
-MLX model weights stay in macOS page cache after the process exits. Back-to-back runs reuse cached weights and complete in under 1 second - close to persistent server performance.
+**Auto mode (default):** The embedding server starts on demand and stops after each invocation. No setup, no background processes, no memory footprint when idle. The first run downloads models from HuggingFace (~1-3GB depending on model). This works well because MLX loads weights via mmap - macOS keeps the file in page cache after the process exits, so subsequent runs reload the model in ~100ms instead of ~15s. Best for: occasional use, scripts, CI.
 
-![Latency breakdown](grep-latency-gantt.png)
-
-For heavy batch usage (many queries in a row), persistent mode eliminates the ~0.8s startup overhead:
+**Persistent mode:** Keep the server running across invocations. Eliminates the ~0.9s per-call overhead from process startup and model reload. Best for: interactive sessions where you run many queries back-to-back.
 
 ```bash
 jina-grep serve start   # keep running in background
+# ... run as many queries as you want, each takes ~10ms ...
 jina-grep serve stop    # stop when done
 ```
+
+Auto mode detects a running persistent server and reuses it (without stopping it afterwards).
+
+![Latency breakdown](https://raw.githubusercontent.com/jina-ai/jina-grep-cli/refs/heads/main/grep-latency-gantt.png)
 
 ### Pipe mode: rerank grep output
 
