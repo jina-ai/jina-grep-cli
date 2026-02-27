@@ -44,14 +44,15 @@ def ensure_server(server_url: str = "http://localhost:8089", port: int = 8089) -
     # Register cleanup
     atexit.register(_cleanup_auto_server)
 
-    # Wait for server to be ready (30 seconds, 0.5s intervals)
+    # Wait for server to be ready
+    # Fast poll first (server typically starts in ~150ms), then slow poll
     print("Starting embedding server...", file=sys.stderr, end="", flush=True)
-    for i in range(60):
-        time.sleep(0.5)
+    for i in range(300):
+        time.sleep(0.02 if i < 50 else 0.5)
         if client.health_check():
             print(" ready", file=sys.stderr)
             return True
-        if i % 4 == 3:
+        if i == 50 or (i > 50 and i % 4 == 0):
             print(".", file=sys.stderr, end="", flush=True)
 
     # Timeout - kill the server we started
