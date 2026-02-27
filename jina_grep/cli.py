@@ -74,7 +74,7 @@ def grep_main(args=None):
     @click.option("--threshold", type=float, default=0.5, help="Similarity threshold (default: 0.5)")
     @click.option("--top-k", type=int, default=10, help="Max results (default: 10)")
     @click.option("--model", default="jina-embeddings-v5-small", help="Model name")
-    @click.option("--task", type=click.Choice(["retrieval", "text-matching", "clustering", "classification"]), default=None, help="Embedding task (auto-detected)")
+    @click.option("--task", type=click.Choice(["retrieval", "text-matching", "clustering", "classification", "nl2code", "qa", "code2code", "code2nl", "code2completion"]), default=None, help="Embedding task (auto-detected)")
     @click.option("--server", default="http://localhost:8089", help="Server URL")
     @click.option("--granularity", type=click.Choice(["line", "paragraph", "sentence"]), default="line")
     @click.argument("pattern", required=False, default=None)

@@ -193,7 +193,7 @@ def pipe_rerank(
     # Embed query
     try:
         query_kwargs = {"task": options.task}
-        if options.task == "retrieval":
+        if options.task in ("retrieval", "nl2code", "qa", "code2code", "code2nl", "code2completion"):
             query_kwargs["prompt_name"] = "query"
         query_emb = client.embed([pattern], model=options.model, **query_kwargs)[0]
     except Exception as e:
@@ -203,7 +203,7 @@ def pipe_rerank(
     # Embed contents (batch)
     try:
         doc_kwargs = {"task": options.task}
-        if options.task == "retrieval":
+        if options.task in ("retrieval", "nl2code", "qa", "code2code", "code2nl", "code2completion"):
             doc_kwargs["prompt_name"] = "document"
         content_embs = client.embed(valid_contents, model=options.model, **doc_kwargs)
     except Exception as e:
@@ -381,7 +381,7 @@ def search_file(
 
     try:
         doc_kwargs = {"task": options.task}
-        if options.task == "retrieval":
+        if options.task in ("retrieval", "nl2code", "qa", "code2code", "code2nl", "code2completion"):
             doc_kwargs["prompt_name"] = "document"
         chunk_embeddings = client.embed(
             chunk_texts,
@@ -635,7 +635,7 @@ def semantic_grep(
 
     try:
         query_kwargs = {"task": options.task}
-        if options.task == "retrieval":
+        if options.task in ("retrieval", "nl2code", "qa", "code2code", "code2nl", "code2completion"):
             query_kwargs["prompt_name"] = "query"
         query_embedding = client.embed([pattern], model=options.model, **query_kwargs)[0]
     except Exception as e:

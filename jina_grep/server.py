@@ -23,13 +23,25 @@ MLX_MODELS = {
         "clustering": "jinaai/jina-embeddings-v5-text-nano-clustering-mlx",
         "classification": "jinaai/jina-embeddings-v5-text-nano-classification-mlx",
     },
+    # Code models: single checkpoint, task handled via instruction prefix
+    "jina-code-embeddings-0.5b": {
+        "_all": "jinaai/jina-code-embeddings-0.5b-mlx",
+    },
+    "jina-code-embeddings-1.5b": {
+        "_all": "jinaai/jina-code-embeddings-1.5b-mlx",
+    },
 }
+
+# Code model names for dispatch
+CODE_MODELS = {"jina-code-embeddings-0.5b", "jina-code-embeddings-1.5b"}
 
 # Supported Matryoshka dimensions
 MATRYOSHKA_DIMS = {32, 64, 128, 256, 512, 768, 1024}
 
 VALID_TASKS = {"retrieval", "text-matching", "clustering", "classification"}
-VALID_PROMPT_NAMES = {"query", "document"}
+CODE_TASKS = {"nl2code", "qa", "code2code", "code2nl", "code2completion"}
+ALL_TASKS = VALID_TASKS | CODE_TASKS
+VALID_PROMPT_NAMES = {"query", "document", "passage"}
 
 # Guardrails
 MAX_BATCH_SIZE = 512
@@ -74,10 +86,17 @@ def get_model(model_name: str, task: str):
     """Load or retrieve cached MLX model and tokenizer for given task."""
     if model_name not in MLX_MODELS:
         raise ValueError(f"Unsupported model: {model_name}. Supported: {', '.join(MLX_MODELS)}")
-    if task not in VALID_TASKS:
-        raise ValueError(f"Unsupported task: {task}. Supported: {', '.join(VALID_TASKS)}")
 
-    cache_key = (model_name, task)
+    is_code = model_name in CODE_MODELS
+    if is_code:
+        if task not in CODE_TASKS:
+            raise ValueError(f"Unsupported task for code model: {task}. Supported: {', '.join(CODE_TASKS)}")
+    else:
+        if task not in VALID_TASKS:
+            raise ValueError(f"Unsupported task: {task}. Supported: {', '.join(VALID_TASKS)}")
+
+    # Code models use single checkpoint for all tasks
+    cache_key = (model_name, "_all") if is_code else (model_name, task)
     if cache_key not in _models:
         import importlib.util
         import json
@@ -86,7 +105,7 @@ def get_model(model_name: str, task: str):
         from huggingface_hub import snapshot_download
         from tokenizers import Tokenizer
 
-        hf_name = MLX_MODELS[model_name][task]
+        hf_name = MLX_MODELS[model_name]["_all"] if is_code else MLX_MODELS[model_name][task]
 
         # Download all model files
         model_dir = snapshot_download(hf_name)
@@ -98,14 +117,15 @@ def get_model(model_name: str, task: str):
 
         # Import model.py from the downloaded repo
         spec = importlib.util.spec_from_file_location(
-            f"jina_mlx_model_{task}",
+            f"jina_mlx_model_{model_name}",
             os.path.join(model_dir, "model.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
         # Create model and load weights
-        model = mod.JinaEmbeddingModel(config)
+        model_class = mod.JinaCodeEmbeddingModel if is_code else mod.JinaEmbeddingModel
+        model = model_class(config)
         weights = mx.load(os.path.join(model_dir, "model.safetensors"))
         model.load_weights(list(weights.items()))
         mx.eval(model.parameters())
@@ -137,8 +157,10 @@ async def create_embeddings(request: EmbeddingRequest):
         )
 
     task = request.task
-    if task not in VALID_TASKS:
-        raise HTTPException(status_code=400, detail=f"Invalid task: {task}. Must be one of: {', '.join(VALID_TASKS)}")
+    is_code = request.model in CODE_MODELS
+    valid = CODE_TASKS if is_code else VALID_TASKS
+    if task not in valid:
+        raise HTTPException(status_code=400, detail=f"Invalid task: {task}. Must be one of: {', '.join(sorted(valid))}")
 
     if request.truncate_dim is not None and request.truncate_dim not in MATRYOSHKA_DIMS:
         raise HTTPException(
@@ -151,23 +173,36 @@ async def create_embeddings(request: EmbeddingRequest):
     except (ValueError, RuntimeError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Map prompt_name to task_type for the model's encode()
-    if task == "retrieval":
-        prompt_name = request.prompt_name or "query"
-        if prompt_name not in VALID_PROMPT_NAMES:
-            raise HTTPException(status_code=400, detail=f"Invalid prompt_name: {prompt_name}")
-        task_type = f"retrieval.{prompt_name}" if prompt_name == "query" else "retrieval.passage"
-    else:
-        task_type = task
-
     try:
         import mlx.core as mx
-        embeddings = model.encode(
-            request.input,
-            tokenizer,
-            task_type=task_type,
-            truncate_dim=request.truncate_dim,
-        )
+
+        if is_code:
+            # Code models: task + prompt_type
+            prompt_type = request.prompt_name or "query"
+            if prompt_type == "document":
+                prompt_type = "passage"
+            embeddings = model.encode(
+                request.input,
+                tokenizer,
+                task=task,
+                prompt_type=prompt_type,
+                truncate_dim=request.truncate_dim,
+            )
+        else:
+            # v5 models: task_type string
+            if task == "retrieval":
+                prompt_name = request.prompt_name or "query"
+                if prompt_name not in VALID_PROMPT_NAMES:
+                    raise HTTPException(status_code=400, detail=f"Invalid prompt_name: {prompt_name}")
+                task_type = f"retrieval.{prompt_name}" if prompt_name == "query" else "retrieval.passage"
+            else:
+                task_type = task
+            embeddings = model.encode(
+                request.input,
+                tokenizer,
+                task_type=task_type,
+                truncate_dim=request.truncate_dim,
+            )
         mx.eval(embeddings)
         embeddings = embeddings.tolist()
     except Exception as e:
