@@ -1,13 +1,8 @@
 """Client for embedding server and semantic search logic."""
 
-import atexit
 import fnmatch
-import os
 import re
-import signal
-import subprocess
 import sys
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator, Optional
@@ -15,60 +10,16 @@ from typing import Iterator, Optional
 import httpx
 import numpy as np
 
-_auto_started_pid = None
+from .embedder import LocalEmbedder
 
 
-def ensure_server(server_url: str = "http://localhost:8089", port: int = 8089) -> bool:
-    """Ensure embedding server is running. Auto-starts if needed.
-    Returns True if server is available, False otherwise."""
-    global _auto_started_pid
-
+def _get_client(server_url: str = "http://localhost:8089"):
+    """Get embedding client: use HTTP if persistent server is running, else local MLX."""
     client = EmbeddingClient(server_url)
     if client.health_check():
-        return True
-
-    # Auto-start server silently
-    log_dir = Path.home() / ".jina-grep"
-    log_dir.mkdir(exist_ok=True)
-    log_file = log_dir / "server.log"
-
-    with open(log_file, "a") as lf:
-        proc = subprocess.Popen(
-            [sys.executable, "-m", "jina_grep.server", "--host", "127.0.0.1", "--port", str(port)],
-            stdout=lf,
-            stderr=lf,
-            start_new_session=True,
-        )
-    _auto_started_pid = proc.pid
-
-    # Register cleanup
-    atexit.register(_cleanup_auto_server)
-
-    # Wait for server to be ready
-    # Fast poll first (server typically starts in ~150ms), then slow poll
-    print("Starting embedding server...", file=sys.stderr, end="", flush=True)
-    for i in range(300):
-        time.sleep(0.02 if i < 50 else 0.5)
-        if client.health_check():
-            print(" ready", file=sys.stderr)
-            return True
-        if i == 50 or (i > 50 and i % 4 == 0):
-            print(".", file=sys.stderr, end="", flush=True)
-
-    # Timeout - kill the server we started
-    _cleanup_auto_server()
-    return False
-
-
-def _cleanup_auto_server():
-    global _auto_started_pid
-    if _auto_started_pid is not None:
-        pid = _auto_started_pid
-        _auto_started_pid = None
-        try:
-            os.kill(pid, signal.SIGKILL)
-        except OSError:
-            pass
+        return client
+    client.close()
+    return LocalEmbedder()
 
 
 @dataclass
@@ -218,12 +169,7 @@ def pipe_rerank(
     options: SearchOptions,
 ) -> int:
     """Read grep output from stdin, rerank by semantic similarity."""
-    client = EmbeddingClient(options.server_url)
-
-    if not client.health_check():
-        if not ensure_server(options.server_url):
-            print("Error: Cannot start embedding server", file=sys.stderr)
-            return 2
+    client = _get_client(options.server_url)
 
     # Read all stdin lines
     raw_lines = []
@@ -585,13 +531,7 @@ def semantic_classify(
     only_matching: bool = False,
 ) -> int:
     """Zero-shot classification: assign best label to each line/chunk."""
-    client = EmbeddingClient(options.server_url)
-
-    if not client.health_check():
-        if not ensure_server(options.server_url):
-            if not options.quiet:
-                print("Error: Cannot start embedding server", file=sys.stderr)
-            return 2
+    client = _get_client(options.server_url)
 
     # Embed all labels
     try:
@@ -709,13 +649,7 @@ def semantic_grep(
     options: SearchOptions,
 ) -> int:
     """Main semantic grep function. Returns exit code."""
-    client = EmbeddingClient(options.server_url)
-
-    if not client.health_check():
-        if not ensure_server(options.server_url):
-            if not options.quiet:
-                print("Error: Cannot start embedding server", file=sys.stderr)
-            return 2
+    client = _get_client(options.server_url)
 
     try:
         query_kwargs = {"task": options.task}
