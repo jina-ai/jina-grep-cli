@@ -26,10 +26,15 @@ Requirements: Python 3.10+, Apple Silicon Mac.
 
 ## Usage
 
-Start the local embedding server (downloads model on first run):
+No setup needed. The embedding server starts automatically on first use and stops when done. If models aren't cached locally, the first run downloads them from HuggingFace (~1-3GB depending on model).
+
+Subsequent runs with page cache warm complete in ~1 second total (including server start/stop).
+
+For persistent server mode (avoids startup overhead on every call):
 
 ```bash
-jina-grep serve start
+jina-grep serve start   # keep running in background
+jina-grep serve stop    # stop when done
 ```
 
 ### Pipe mode: rerank grep output
