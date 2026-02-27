@@ -6,15 +6,20 @@ os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"  # suppress tokenizers warning
 
-# Remove SOCKS proxy env vars that break httpx (used by huggingface_hub)
-for _proxy_key in ("ALL_PROXY", "all_proxy", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
-    if _proxy_key in os.environ and "socks" in os.environ[_proxy_key].lower():
-        del os.environ[_proxy_key]
-
 import sys
 from typing import Optional
 
 import numpy as np
+
+
+def _snapshot_download(repo_id: str) -> str:
+    """Download model, trying offline cache first to avoid proxy issues."""
+    from huggingface_hub import snapshot_download
+
+    try:
+        return snapshot_download(repo_id, local_files_only=True)
+    except Exception:
+        return snapshot_download(repo_id)
 
 # Unified MLX repos with dynamic LoRA adapter switching
 MLX_MODELS = {
@@ -81,10 +86,9 @@ def get_model(model_name: str, task: str):
             import json
 
             import mlx.core as mx
-            from huggingface_hub import snapshot_download
             from tokenizers import Tokenizer
 
-            model_dir = snapshot_download(CODE_MODELS_MAP[model_name])
+            model_dir = _snapshot_download(CODE_MODELS_MAP[model_name])
 
             with open(os.path.join(model_dir, "config.json")) as f:
                 config = json.load(f)
@@ -105,9 +109,8 @@ def get_model(model_name: str, task: str):
             _models[model_name] = (model, tokenizer)
         else:
             # v5 models: use unified repo with dynamic LoRA
-            from huggingface_hub import snapshot_download
 
-            model_dir = snapshot_download(MLX_MODELS[model_name])
+            model_dir = _snapshot_download(MLX_MODELS[model_name])
 
             # Import utils.py from the downloaded repo
             import importlib.util
