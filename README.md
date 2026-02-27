@@ -136,45 +136,85 @@ Semantic flags:
   --granularity   line/paragraph/sentence (default: line)
 ```
 
-## Benchmark (M3 Ultra)
+## Benchmark (M3 Ultra, 512GB)
+
+All models use `mx.fast.scaled_dot_product_attention` and `mx.fast.rope` for optimized inference.
 
 ### v5-small (677M, 1024d)
 
 ```
 Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s
 ---------------------------------------------------------------------------
-1x short                      1       9      7.3      7.3       1228
-1x medium                     1     117     12.1     12.1       9633
-1x long (~520 tok)            1     624     33.2     32.4      18790
-1x very long (~2.6K tok)      1    2470    164.1    164.0      15051
-8x short                      8      72     11.7     11.5       6128
-32x short                    32     291     23.7     23.7      12279
-128x short                  128    1164     70.1     70.6      16614
-256x short                  256    2329    132.2    133.2      17614
-8x long                       8    4992    197.3    197.1      25298
-32x long                     32   19968    810.7    774.0      24631
+1x short                      1       5      7.5      7.3        671
+1x medium                     1      56      9.8      9.7       5734
+1x long (~520 tok)            1     161     15.4     15.4      10448
+1x very long (~2.6K tok)      1     801     52.3     49.7      15320
+8x short                      8      40     10.3     10.2       3889
+32x short                    32     160     22.4     21.7       7138
+128x short                  128     640     56.9     53.5      11250
+256x short                  256    1280    106.3    106.6      12041
+8x long                       8    1288     66.8     66.7      19273
+32x long                     32    5152    238.5    239.2      21598
 ```
 
-Single query: **7ms**. Peak throughput: **25.3K tok/s**.
+Single query: **7.5ms**. Peak throughput: **21.6K tok/s**.
 
 ### v5-nano (239M, 768d)
 
 ```
 Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s
 ---------------------------------------------------------------------------
-1x short                      1       9      2.9      2.8       3145
-1x medium                     1     117      4.4      4.4      26353
-1x long (~520 tok)            1     624     10.1     10.1      61660
-1x very long (~2.6K tok)      1    2470     41.0     40.9      60193
-8x short                      8      72      5.2      5.1      13836
-32x short                    32     291      8.7      8.6      33344
-128x short                  128    1164     22.6     22.3      51399
-256x short                  256    2329     41.7     42.0      55829
-8x long                       8    4992     52.2     51.7      95668
-32x long                     32   19968    202.2    201.7      98740
+1x short                      1       6      3.0      3.2       1971
+1x medium                     1      57      3.4      3.4      16787
+1x long (~520 tok)            1     162      4.8      4.8      33634
+1x very long (~2.6K tok)      1     802     13.2     13.1      60931
+8x short                      8      48      4.2      4.1      11563
+32x short                    32     192      7.4      7.3      25796
+128x short                  128     768     17.8     17.8      43027
+256x short                  256    1536     34.6     34.6      44450
+8x long                       8    1296     18.3     18.3      70734
+32x long                     32    5184     67.3     67.2      76984
 ```
 
-Single query: **2.9ms**. Peak throughput: **98.7K tok/s**.
+Single query: **3ms**. Peak throughput: **77K tok/s**.
+
+### code-1.5b (1.54B, 1536d)
+
+```
+Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s
+---------------------------------------------------------------------------
+1x short                      1       5     14.6     11.2        343
+1x medium                     1      56     20.0     20.0       2797
+1x long (~520 tok)            1     161     34.0     34.0       4739
+1x very long (~2.6K tok)      1     801    117.1    113.5       6842
+8x short                      8      40     28.2     28.3       1418
+32x short                    32     160     72.6     71.4       2205
+128x short                  128     640    248.6    246.9       2574
+256x short                  256    1280    486.9    486.7       2629
+8x long                       8    1288    174.7    174.6       7374
+32x long                     32    5152    672.3    672.7       7664
+```
+
+Single query: **14.6ms**. Peak throughput: **7.7K tok/s**.
+
+### code-0.5b (0.49B, 896d)
+
+```
+Config                    Batch ~Tokens   Avg ms   P50 ms      Tok/s
+---------------------------------------------------------------------------
+1x short                      1       5      6.0      5.8        828
+1x medium                     1      56      8.5      8.6       6558
+1x long (~520 tok)            1     161     12.3     12.3      13126
+1x very long (~2.6K tok)      1     801     40.1     38.1      19984
+8x short                      8      40      9.5      9.5       4192
+32x short                    32     160     25.3     25.2       6331
+128x short                  128     640     78.5     78.7       8152
+256x short                  256    1280    150.8    150.8       8487
+8x long                       8    1288     55.4     55.4      23248
+32x long                     32    5152    202.1    202.3      25491
+```
+
+Single query: **6ms**. Peak throughput: **25.5K tok/s**.
 
 ## License
 
