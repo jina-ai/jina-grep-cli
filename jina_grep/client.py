@@ -15,10 +15,13 @@ from .embedder import LocalEmbedder
 
 def _get_client(server_url: str = "http://localhost:8089"):
     """Get embedding client: use HTTP if persistent server is running, else local MLX."""
-    client = EmbeddingClient(server_url)
-    if client.health_check():
-        return client
-    client.close()
+    try:
+        client = EmbeddingClient(server_url)
+        if client.health_check():
+            return client
+        client.close()
+    except Exception:
+        pass
     return LocalEmbedder()
 
 
@@ -73,7 +76,8 @@ class EmbeddingClient:
 
     def __init__(self, server_url: str = "http://localhost:8089"):
         self.server_url = server_url.rstrip("/")
-        self.client = httpx.Client(timeout=120.0)
+        # Bypass system proxy for localhost connections
+        self.client = httpx.Client(timeout=120.0, proxy=None)
 
     def embed(
         self,
