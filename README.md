@@ -28,7 +28,7 @@ Requirements: Python 3.10+, Apple Silicon Mac.
 
 Two modes:
 
-**Serverless (default):** Model loads in-process, runs the query, exits. No server, no background processes. MLX loads weights via mmap, so macOS keeps them in page cache after exit - subsequent runs reload in ~100ms instead of ~15s. Best for: occasional use, scripts, CI.
+**Serverless (default):** Model loads in-process, runs the query, exits. No server, no background processes. Uses a unified MLX checkpoint with dynamic LoRA adapter switching (one base model for all tasks). MLX loads weights via mmap, so macOS keeps them in page cache after exit. Best for: occasional use, scripts, CI.
 
 **Persistent server:** Keep a server running across invocations. Model stays in GPU memory, every query is ~10ms. Best for: interactive sessions, batch workloads.
 
