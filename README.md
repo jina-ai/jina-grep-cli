@@ -28,9 +28,9 @@ Requirements: Python 3.10+, Apple Silicon Mac.
 
 Two server modes, both transparent to the user:
 
-**Auto mode (default):** The embedding server starts on demand and stops after each invocation. No setup, no background processes, no memory footprint when idle. The first run downloads models from HuggingFace (~1-3GB depending on model). This works well because MLX loads weights via mmap - macOS keeps the file in page cache after the process exits, so subsequent runs reload the model in ~100ms instead of ~15s. Best for: occasional use, scripts, CI.
+**Auto mode (default, aka serverless):** The embedding server starts on demand and stops after each invocation. No setup, no background processes, no memory footprint when idle. The first run downloads models from HuggingFace (~1-3GB depending on model). This works well because MLX loads weights via mmap - macOS keeps the file in page cache after the process exits, so subsequent runs reload the model in ~100ms instead of ~15s. Best for: occasional use, scripts, CI.
 
-**Persistent mode:** Keep the server running across invocations. Eliminates the ~0.9s per-call overhead from process startup and model reload. Best for: interactive sessions where you run many queries back-to-back.
+**Persistent mode:** Keep the server running across invocations. The model stays loaded in GPU memory - every query is a direct embed call with zero startup cost. Avoids the ~15s cold start entirely and eliminates the ~0.9s warm overhead per call. Best for: interactive sessions, rapid iteration, heavy batch workloads.
 
 ```bash
 jina-grep serve start   # keep running in background
