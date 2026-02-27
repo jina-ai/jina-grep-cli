@@ -1,16 +1,18 @@
 # <img src="logo.svg?v=2" alt="" width="28" height="28" style="vertical-align: middle;"/> jina-grep
 
-Semantic grep powered by Jina embeddings v5, running locally on Apple Silicon via MLX.
+Semantic grep powered by Jina embeddings, running locally on Apple Silicon via MLX.
 
-Three modes: pipe grep output for semantic reranking, search files directly with natural language, or zero-shot classification.
+Four modes: pipe grep output for semantic reranking, search files directly with natural language, zero-shot classification, or code search.
 
 
-| Model | Params | Dims | Max Seq | Matryoshka |
-|-------|--------|------|---------|------------|
-| jina-embeddings-v5-small | 677M | 1024 | 32768 | 32-1024 |
-| jina-embeddings-v5-nano | 239M | 768 | 8192 | 32-768 |
+| Model | Params | Dims | Max Seq | Matryoshka | Tasks |
+|-------|--------|------|---------|------------|-------|
+| jina-embeddings-v5-small | 677M | 1024 | 32768 | 32-1024 | retrieval, text-matching, clustering, classification |
+| jina-embeddings-v5-nano | 239M | 768 | 8192 | 32-768 | retrieval, text-matching, clustering, classification |
+| jina-code-embeddings-1.5b | 1.54B | 1536 | 32768 | 128-1536 | nl2code, code2code, code2nl, code2completion, qa |
+| jina-code-embeddings-0.5b | 0.49B | 896 | 32768 | 64-896 | nl2code, code2code, code2nl, code2completion, qa |
 
-Per-task MLX checkpoints (retrieval, text-matching, clustering, classification) loaded on demand from HuggingFace. No PyTorch, no transformers - pure MLX on Metal GPU. Server auto-batches large inputs (up to 256 per request).
+Per-task MLX checkpoints (v5) or single checkpoint with instruction prefixes (code) loaded on demand from HuggingFace. No PyTorch, no transformers - pure MLX on Metal GPU. Server auto-batches large inputs (up to 256 per request).
 
 ## Install
 
@@ -45,6 +47,31 @@ jina-grep "memory leak" src/
 jina-grep -r --threshold 0.3 "database connection pooling" .
 jina-grep --top-k 5 "retry with exponential backoff" *.py
 ```
+
+### Code search
+
+Use `--model` to switch to code embeddings and `--task` for code-specific tasks:
+
+```bash
+# Natural language to code: find code that matches a description
+jina-grep --model jina-code-embeddings-1.5b --task nl2code "sort a list in descending order" src/
+
+# Code to code: find similar code snippets
+jina-grep --model jina-code-embeddings-0.5b --task code2code "for i in range(len(arr))" src/
+
+# Code to natural language: find comments/docs matching code
+jina-grep --model jina-code-embeddings-1.5b --task code2nl "def binary_search(arr, target):" src/
+
+# Pipe mode works too
+grep -rn "def " src/ | jina-grep --model jina-code-embeddings-1.5b --task nl2code "HTTP retry with backoff"
+```
+
+Code tasks:
+- `nl2code` - natural language query to code (default for code models)
+- `code2code` - find similar code snippets
+- `code2nl` - find comments/docs for code
+- `code2completion` - find completions for partial code
+- `qa` - question answering over code
 
 ### Zero-shot classification
 
@@ -103,7 +130,8 @@ Semantic flags:
   --threshold     Cosine similarity threshold (default: 0.5)
   --top-k         Max results (default: 10)
   --model         Model name (default: jina-embeddings-v5-small)
-  --task          retrieval/text-matching/clustering/classification
+  --task          v5: retrieval/text-matching/clustering/classification
+                  code: nl2code/code2code/code2nl/code2completion/qa
   --server        Server URL (default: http://localhost:8089)
   --granularity   line/paragraph/sentence (default: line)
 ```
