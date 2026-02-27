@@ -71,8 +71,8 @@ def grep_main(args=None):
     @click.option("-o", "--only-matching", is_flag=True, help="Print only matching label (classification mode)")
     @click.option("-e", "--regexp", multiple=True, help="Classification labels (multiple -e for zero-shot classification)")
     @click.option("-f", "--file", "label_file", type=click.Path(exists=True), help="Read classification labels from file (one per line)")
-    @click.option("--threshold", type=float, default=0.5, help="Similarity threshold (default: 0.5)")
-    @click.option("--top-k", type=int, default=10, help="Max results (default: 10)")
+    @click.option("--threshold", type=float, default=None, help="Similarity threshold (default: 0.5, ignored when --top-k is set)")
+    @click.option("--top-k", type=int, default=None, help="Max results")
     @click.option("--model", default="jina-embeddings-v5-nano", help="Model name")
     @click.option("--task", type=click.Choice(["retrieval", "text-matching", "clustering", "classification", "nl2code", "qa", "code2code", "code2nl", "code2completion"]), default=None, help="Embedding task (auto-detected)")
     @click.option("--server", default="http://localhost:8089", help="Server URL")
@@ -129,6 +129,9 @@ def grep_main(args=None):
             use_color = color == "always" or (color == "auto" and sys.stdout.isatty())
             show_fn = not no_filename and (with_filename or len(files) > 1 or recursive)
 
+            _threshold = threshold if threshold is not None else 0.5
+            _top_k = top_k if top_k is not None else 10
+
             classify_options = SearchOptions(
                 recursive=recursive,
                 files_with_matches=files_with_matches,
@@ -145,8 +148,8 @@ def grep_main(args=None):
                 invert_match=invert_match,
                 max_count=max_count,
                 quiet=quiet,
-                threshold=threshold,
-                top_k=top_k,
+                threshold=_threshold,
+                top_k=_top_k,
                 model=model,
                 task="classification",
                 server_url=server,
@@ -184,6 +187,14 @@ def grep_main(args=None):
             before_context = context
 
         use_color = color == "always" or (color == "auto" and sys.stdout.isatty())
+
+        # When --top-k is set without --threshold, disable threshold filtering
+        if top_k is not None and threshold is None:
+            threshold = 0.0
+        if threshold is None:
+            threshold = 0.5
+        if top_k is None:
+            top_k = 10
 
         options = SearchOptions(
             recursive=recursive,
