@@ -63,11 +63,19 @@ def ensure_server(server_url: str = "http://localhost:8089", port: int = 8089) -
 def _cleanup_auto_server():
     global _auto_started_pid
     if _auto_started_pid is not None:
+        pid = _auto_started_pid
+        _auto_started_pid = None
         try:
-            os.kill(_auto_started_pid, signal.SIGTERM)
+            os.kill(pid, signal.SIGTERM)
+            # Wait for server to actually exit (avoid race with next invocation)
+            for _ in range(50):
+                time.sleep(0.05)
+                try:
+                    os.kill(pid, 0)  # check if still alive
+                except OSError:
+                    break  # process exited
         except OSError:
             pass
-        _auto_started_pid = None
 
 
 @dataclass
