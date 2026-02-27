@@ -26,11 +26,13 @@ Requirements: Python 3.10+, Apple Silicon Mac.
 
 ## Usage
 
-No setup needed. The embedding server starts automatically on first use and stops when done. If models aren't cached locally, the first run downloads them from HuggingFace (~1-3GB depending on model).
+No setup needed. The embedding server starts and stops automatically per invocation. Models are downloaded from HuggingFace on first use (~1-3GB depending on model).
 
-Subsequent runs with page cache warm complete in ~1 second total (including server start/stop).
+MLX model weights stay in macOS page cache after the process exits. Back-to-back runs reuse cached weights and complete in under 1 second - close to persistent server performance.
 
-For persistent server mode (avoids startup overhead on every call):
+![Latency breakdown](grep-latency-gantt.png)
+
+For heavy batch usage (many queries in a row), persistent mode eliminates the ~0.8s startup overhead:
 
 ```bash
 jina-grep serve start   # keep running in background
