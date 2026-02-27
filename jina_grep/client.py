@@ -106,7 +106,7 @@ class SearchOptions:
     model: str = "jina-embeddings-v5-small"
     task: str = "retrieval"
     server_url: str = "http://localhost:8089"
-    granularity: str = "line"
+    granularity: str = "paragraph"
 
     def __post_init__(self):
         if self.include_patterns is None:
@@ -312,7 +312,7 @@ def pipe_rerank(
 
 def split_into_chunks(
     content: str,
-    granularity: str = "line",
+    granularity: str = "paragraph",
 ) -> list[tuple[int, str]]:
     """Split content into chunks with line numbers (1-indexed)."""
     lines = content.splitlines()

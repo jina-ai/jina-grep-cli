@@ -143,7 +143,7 @@ Semantic flags:
   --task          v5: retrieval/text-matching/clustering/classification
                   code: nl2code/code2code/code2nl/code2completion/qa
   --server        Server URL (default: http://localhost:8089)
-  --granularity   line/paragraph/sentence (default: line)
+  --granularity   line/paragraph/sentence (default: paragraph)
 ```
 
 ## Benchmark (M3 Ultra, 512GB)
