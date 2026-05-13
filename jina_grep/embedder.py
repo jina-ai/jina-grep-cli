@@ -26,6 +26,8 @@ def _snapshot_download(repo_id: str) -> str:
 MLX_MODELS = {
     "jina-embeddings-v5-small": "jinaai/jina-embeddings-v5-text-small-mlx",
     "jina-embeddings-v5-nano": "jinaai/jina-embeddings-v5-text-nano-mlx",
+    "jina-embeddings-v5-omni-small": "jinaai/jina-embeddings-v5-omni-small-mlx",
+    "jina-embeddings-v5-omni-nano": "jinaai/jina-embeddings-v5-omni-nano-mlx",
 }
 
 # Code models: single checkpoint, no LoRA switching
@@ -49,6 +51,8 @@ MAX_BATCH_SIZE = 512
 MAX_SEQ_LENGTH = {
     "jina-embeddings-v5-small": 32768,
     "jina-embeddings-v5-nano": 8192,
+    "jina-embeddings-v5-omni-small": 32768,
+    "jina-embeddings-v5-omni-nano": 8192,
 }
 
 # Global model cache: key = model_name -> JinaMultiTaskModel or (code_model, tokenizer)
