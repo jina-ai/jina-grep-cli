@@ -9,10 +9,12 @@ Four modes: pipe grep output for semantic reranking, search files directly with 
 |-------|--------|------|---------|------------|-------|
 | jina-embeddings-v5-small | 677M | 1024 | 32768 | 32-1024 | retrieval, text-matching, clustering, classification |
 | jina-embeddings-v5-nano | 239M | 768 | 8192 | 32-768 | retrieval, text-matching, clustering, classification |
+| jina-embeddings-v5-omni-small | 1.74B | 1024 | 32768 | 32-1024 | retrieval, text-matching, clustering, classification |
+| jina-embeddings-v5-omni-nano | 1.04B | 768 | 8192 | 32-768 | retrieval, text-matching, clustering, classification |
 | jina-code-embeddings-1.5b | 1.54B | 1536 | 32768 | 128-1536 | nl2code, code2code, code2nl, code2completion, qa |
 | jina-code-embeddings-0.5b | 0.49B | 896 | 32768 | 64-896 | nl2code, code2code, code2nl, code2completion, qa |
 
-Unified MLX checkpoints with dynamic LoRA adapter switching (v5) or single checkpoint with instruction prefixes (code). One base model in memory for all tasks, adapter switching in 20ms. No PyTorch, no transformers - pure MLX on Metal GPU.
+Unified MLX checkpoints with dynamic LoRA adapter switching (v5/omni) or single checkpoint with instruction prefixes (code). One base model in memory for all tasks, adapter switching in 20ms. The omni models include vision, audio, and video towers for multimodal embeddings. No PyTorch, no transformers - pure MLX on Metal GPU.
 
 ## Install
 
